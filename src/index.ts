@@ -152,6 +152,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
+// HTML_CONTENT – fixed nested backticks issue (using string concatenation instead of template literals inside)
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -213,11 +214,11 @@ let userId = null, currentCoins = 0, isSpinning = false, bigWinAmount = 0;
 const gemsList = ${JSON.stringify(GEMS)};
 function createReelDom(id, arr) { const reel = document.getElementById(id); reel.innerHTML = ""; arr.forEach(src => { let img = document.createElement("img"); img.src = src; reel.appendChild(img); }); }
 function randomReel() { let count = {}; gemsList.forEach(g=>count[g]=0); let arr=[]; while(arr.length<15){ let g=gemsList[Math.floor(Math.random()*gemsList.length)]; if(count[g]<3){arr.push(g); count[g]++;}} arr.sort(()=>Math.random()-0.5); return arr; }
-function initReels() { for(let i=1;i<=3;i++) createReelDom(`r${i}`, randomReel()); } initReels();
+function initReels() { for(let i=1;i<=3;i++) createReelDom('r'+i, randomReel()); } initReels();
 function updateCoins() { document.getElementById("coins").innerText = currentCoins.toFixed(2); }
 function enableSpin(en) { const btn = document.getElementById("spinBtn"); btn.style.pointerEvents = en ? "auto" : "none"; btn.style.opacity = en ? "1" : "0.6"; }
-async function animateSpin(finalMatrix) { return new Promise(resolve => { let spins=0; const int=setInterval(()=>{ for(let i=1;i<=3;i++) createReelDom(`r${i}`, randomReel()); spins++; if(spins>=20){ clearInterval(int); for(let col=0;col<3;col++){ let colImgs=[]; for(let row=0;row<3;row++) colImgs.push(finalMatrix[row][col]); let full=[...colImgs,...colImgs,...colImgs,...colImgs,...colImgs].slice(0,15); createReelDom(`r${col+1}`, full); } resolve(); } },50); }); }
-function highlightWins(mat){ document.querySelectorAll('.glow').forEach(el=>el.classList.remove('glow')); for(let row=0;row<3;row++){ const [a,b,c]=mat[row]; if(a===b&&b===c){ for(let col=0;col<3;col++) document.getElementById(`r${col+1}`).children[row]?.classList.add('glow'); } else if(a===b||b===c||a===c){ let pairs=[]; if(a===b) pairs.push([0,1]); if(b===c) pairs.push([1,2]); if(a===c) pairs.push([0,2]); for(let p of pairs) for(let col of p) document.getElementById(`r${col+1}`).children[row]?.classList.add('glow'); } } }
+async function animateSpin(finalMatrix) { return new Promise(resolve => { let spins=0; const int=setInterval(()=>{ for(let i=1;i<=3;i++) createReelDom('r'+i, randomReel()); spins++; if(spins>=20){ clearInterval(int); for(let col=0;col<3;col++){ let colImgs=[]; for(let row=0;row<3;row++) colImgs.push(finalMatrix[row][col]); let full=[...colImgs,...colImgs,...colImgs,...colImgs,...colImgs].slice(0,15); createReelDom('r'+(col+1), full); } resolve(); } },50); }); }
+function highlightWins(mat){ document.querySelectorAll('.glow').forEach(el=>el.classList.remove('glow')); for(let row=0;row<3;row++){ const [a,b,c]=mat[row]; if(a===b&&b===c){ for(let col=0;col<3;col++) document.getElementById('r'+(col+1)).children[row]?.classList.add('glow'); } else if(a===b||b===c||a===c){ let pairs=[]; if(a===b) pairs.push([0,1]); if(b===c) pairs.push([1,2]); if(a===c) pairs.push([0,2]); for(let p of pairs) for(let col of p) document.getElementById('r'+(col+1)).children[row]?.classList.add('glow'); } } }
 function smoothCoins(target,cb){ let start=currentCoins, step=Math.max(0.05,(target-start)/20); let it=setInterval(()=>{ start+=step; if(start>=target){ clearInterval(it); currentCoins=target; updateCoins(); if(cb)cb(); } else { currentCoins=start; updateCoins(); } },30); }
 function showBigWin(amt){ document.getElementById("winLabel").innerText = "+"+amt.toFixed(2)+" COINS"; document.getElementById("winOverlay").style.display="flex"; bigWinAmount=amt; }
 function closeWin(){ document.getElementById("winOverlay").style.display="none"; smoothCoins(currentCoins+bigWinAmount,()=>{ isSpinning=false; enableSpin(true); }); bigWinAmount=0; }
