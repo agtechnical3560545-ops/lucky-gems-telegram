@@ -292,7 +292,7 @@ img {
 .bet-bar {
   position: relative;
   width: 90%;
-  bottom: 15px;
+  top: 15px;
   max-width: 520px;
 }
 
