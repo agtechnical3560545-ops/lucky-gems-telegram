@@ -292,24 +292,13 @@ img {
 .bet-bar {
   position: relative;
   width: 90%;
-  top: 30px;
+  top: 35px;
   max-width: 520px;
 }
 
 .bet-bar img {
   width: 100%;
   transform: scale(1.5);
-}
-
-.bet-text {
-  position: absolute;
-  width: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  text-align: center;
-  color: white;
-  font-weight: bold;
-  font-size: 20px;
 }
 
 .spin-btn {
@@ -329,6 +318,7 @@ img {
 .bet-controls {
   display: flex;
   gap: 15px;
+  bottom: 25px;
   background: rgba(0,0,0,0.7);
   border-radius: 50px;
   padding: 5px 15px;
