@@ -9,7 +9,7 @@
       "database_id": "e159dff6-2309-420b-9685-136941a71e33"
     }
   ],
-  "vars": {
-    "WEBAPP_URL": "https://lucky-gems-telegram.workers.dev"
-  }
+"vars": {
+  "WEBAPP_URL": "https://lucky-gems-bot.miniappbot.workers.dev"
+    }
 }
