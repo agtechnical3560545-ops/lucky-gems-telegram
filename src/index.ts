@@ -4,6 +4,7 @@ export interface Env {
   WEBAPP_URL: string;
 }
 
+// Gems CDN URLs (same as original)
 const GEMS = [
   "https://cdn.jsdelivr.net/gh/BestMovieSearchHubBot/IndiaFriendBot@main/public/gems/red.png",
   "https://cdn.jsdelivr.net/gh/BestMovieSearchHubBot/IndiaFriendBot@main/public/gems/blue.png",
@@ -151,7 +152,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// HTML_CONTENT with CDN image URLs
+// ========== COMPLETE CASINO-STYLE HTML CONTENT ==========
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -168,8 +169,8 @@ body{margin:0;background:url('https://cdn.jsdelivr.net/gh/agtechnical3560545-ops
 .machine-container{display:flex;justify-content:center;margin-top:180px;position:relative;}
 .machine{position:relative;width:350px;height:350px;}
 .frame{position:absolute;top:0;left:0;width:100%;height:100%;z-index:3;pointer-events:none;transform:scale(1.25);}
-.reels{position:absolute;top:28px;left:-8px;width:365px;height:350px;display:flex;gap:10px;z-index:2;}
-.reel{display:flex;flex-direction:column;width:85px;align-items:center;}
+.reels{position:absolute;top:28px;left:-8px;width:365px;height:350px;display:flex;gap:10px;z-index:2;overflow:hidden;}
+.reel{display:flex;flex-direction:column;width:85px;align-items:center;transition:transform 0.1s linear;}
 .reel img{width:85px;height:85px;object-fit:contain;margin-bottom:18px;border-radius:12px;}
 .sidebar-new{position:absolute;right:-70px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:20px;z-index:15;}
 .sidebar-btn{background:linear-gradient(145deg,#2a2418,#1a1207);padding:14px 12px;border-radius:60px;font-weight:bold;font-size:14px;text-align:center;color:#ffec9f;border:2px solid #e4b83e;box-shadow:0 8px 0 #5a3e1a;cursor:pointer;width:80px;}
@@ -207,13 +208,8 @@ body{margin:0;background:url('https://cdn.jsdelivr.net/gh/agtechnical3560545-ops
   <div class="sidebar-new"><div class="sidebar-btn" id="referBtn">🔗 REFER</div><div class="sidebar-btn" id="redeemBtn">🎁 REDEEM</div></div>
 </div>
 <div class="controls">
-  <div class="bet-bar">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/bet-bar.png">
-    <div class="bet-text">BET 1</div>
-  </div>
-  <div class="spin-btn" id="spinBtn">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png">
-  </div>
+  <div class="bet-bar"><img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/bet-bar.png"><div class="bet-text">BET 1</div></div>
+  <div class="spin-btn" id="spinBtn"><img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png"></div>
 </div>
 <div id="winOverlay"><div class="win-box"><h1 class="win-title">BIG WIN!</h1><div class="win-amount" id="winLabel">+0</div><button class="collect-btn" id="collectBtn">COLLECT</button></div></div>
 <div id="referModal" class="modal"><div class="modal-content"><div style="font-size:24px;">🔗 YOUR CODE</div><div class="refer-code-box" id="referCodeDisplay">XXXXXX</div><button class="casino-btn" id="closeReferModal">CLOSE</button></div></div>
