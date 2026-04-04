@@ -1,5 +1,5 @@
 {
-  "name": "lucky-gems-bot",
+  "name": "lucky-gems-telegram",
   "main": "src/index.ts",
   "compatibility_date": "2025-01-15",
   "d1_databases": [
@@ -7,12 +7,6 @@
       "binding": "DB",
       "database_name": "lucky-gems-db",
       "database_id": "e159dff6-2309-420b-9685-136941a71e33"
-    }
-  ],
-  "r2_buckets": [
-    {
-      "binding": "ASSETS",
-      "bucket_name": "lucky-gems-assets"
     }
   ],
   "vars": {
