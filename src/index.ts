@@ -304,7 +304,7 @@ img {
 .spin-btn {
   position: absolute;
   right: 15px;
-  margin-top: -20px;
+  margin-top: -15px;
   width: 28%;
   max-width: 180px;
   z-index: 20;
@@ -323,7 +323,7 @@ img {
   padding: 5px 15px;
   border: 1px solid gold;
   z-index: 5;
-  margin-top: -15px;   /* ← ye line add karo, value adjust karna */
+  margin-top: -35px;   /* ← ye line add karo, value adjust karna */
 }
 .bet-controls button {
   background: none;
@@ -337,7 +337,6 @@ img {
   text-align: center;
   padding: 0;
   z-index: 5;
-  margin-top: -20px;
 }
 .bet-controls span {
   font-size: 24px;
