@@ -304,7 +304,7 @@ img {
 .spin-btn {
   position: absolute;
   right: 15px;
-  bottom: 25px;
+  bottom: 5px;
   width: 28%;
   max-width: 180px;
   z-index: 20;
@@ -318,7 +318,7 @@ img {
 .bet-controls {
   display: flex;
   gap: 15px;
-  bottom: 25px;
+  top: 25px;
   background: rgba(0,0,0,0.7);
   border-radius: 50px;
   padding: 5px 15px;
