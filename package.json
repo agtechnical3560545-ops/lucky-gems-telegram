@@ -4,10 +4,10 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "create-bucket": "wrangler r2 bucket create lucky-gems-assets || true",
+    "deploy": "npm run create-bucket && wrangler deploy",
     "db:create": "wrangler d1 create lucky-gems-db",
-    "db:execute": "wrangler d1 execute lucky-gems-db --file=schema.sql",
-    "r2:upload": "wrangler r2 object put lucky-gems-assets/bg.jpg --file=./images/bg.jpg && wrangler r2 object put lucky-gems-assets/frame.png --file=./images/frame.png && wrangler r2 object put lucky-gems-assets/bet-bar.png --file=./images/bet-bar.png && wrangler r2 object put lucky-gems-assets/spin-btn.png --file=./images/spin-btn.png"
+    "db:execute": "wrangler d1 execute lucky-gems-db --file=schema.sql"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250109.0",
