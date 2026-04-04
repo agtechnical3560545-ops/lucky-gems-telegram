@@ -1,6 +1,5 @@
 export interface Env {
   DB: D1Database;
-  ASSETS: R2Bucket;
   BOT_TOKEN: string;
   WEBAPP_URL: string;
 }
@@ -152,7 +151,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// HTML_CONTENT – fixed nested backticks issue (using string concatenation instead of template literals inside)
+// HTML_CONTENT with CDN image URLs
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -163,7 +162,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;900&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;user-select:none;}
-body{margin:0;background:url('bg.jpg') no-repeat center center fixed;background-size:cover;height:100vh;overflow:hidden;font-family:'Orbitron',sans-serif;}
+body{margin:0;background:url('https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/bg.jpg') no-repeat center center fixed;background-size:cover;height:100vh;overflow:hidden;font-family:'Orbitron',sans-serif;}
 .topbar{display:flex;justify-content:space-between;padding:10px 15px;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);color:white;}
 .coins{background:#111;padding:5px 18px;border-radius:40px;border:1px solid #ffd700;}
 .machine-container{display:flex;justify-content:center;margin-top:180px;position:relative;}
@@ -197,10 +196,25 @@ body{margin:0;background:url('bg.jpg') no-repeat center center fixed;background-
 <body>
 <div class="topbar"><div>👤 <span id="username">Player</span></div><div class="coins">💰 <span id="coins">0.00</span></div></div>
 <div class="machine-container">
-  <div class="machine"><img src="frame.png" class="frame"><div class="reels"><div class="reel" id="r1"></div><div class="reel" id="r2"></div><div class="reel" id="r3"></div></div></div>
+  <div class="machine">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/frame.png" class="frame">
+    <div class="reels">
+      <div class="reel" id="r1"></div>
+      <div class="reel" id="r2"></div>
+      <div class="reel" id="r3"></div>
+    </div>
+  </div>
   <div class="sidebar-new"><div class="sidebar-btn" id="referBtn">🔗 REFER</div><div class="sidebar-btn" id="redeemBtn">🎁 REDEEM</div></div>
 </div>
-<div class="controls"><div class="bet-bar"><img src="bet-bar.png"><div class="bet-text">BET 1</div></div><div class="spin-btn" id="spinBtn"><img src="spin-btn.png"></div></div>
+<div class="controls">
+  <div class="bet-bar">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/bet-bar.png">
+    <div class="bet-text">BET 1</div>
+  </div>
+  <div class="spin-btn" id="spinBtn">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png">
+  </div>
+</div>
 <div id="winOverlay"><div class="win-box"><h1 class="win-title">BIG WIN!</h1><div class="win-amount" id="winLabel">+0</div><button class="collect-btn" id="collectBtn">COLLECT</button></div></div>
 <div id="referModal" class="modal"><div class="modal-content"><div style="font-size:24px;">🔗 YOUR CODE</div><div class="refer-code-box" id="referCodeDisplay">XXXXXX</div><button class="casino-btn" id="closeReferModal">CLOSE</button></div></div>
 <div id="redeemModal" class="modal"><div class="modal-content"><div style="font-size:24px;">🎁 REDEEM</div>
@@ -241,15 +255,6 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
-
-    if (path === "/bg.jpg" || path === "/frame.png" || path === "/bet-bar.png" || path === "/spin-btn.png") {
-      const object = await env.ASSETS.get(path.slice(1));
-      if (!object) return new Response("Not Found", { status: 404 });
-      const headers = new Headers();
-      object.writeHttpMetadata(headers);
-      headers.set("Cache-Control", "public, max-age=86400");
-      return new Response(object.body, { headers });
-    }
 
     if (path === "/" || path === "/index.html") {
       return new Response(HTML_CONTENT, { headers: { "Content-Type": "text/html" } });
