@@ -207,18 +207,20 @@ img {
   border-radius: 40px;
   border: 1px solid #ffd700;
 }
+/* MACHINE CONTAINER */
 .machine-container {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-top: 180px;
+  margin-top: 220px; 
   position: relative;
 }
 .machine {
   position: relative;
-  width: 350px;
-  height: 350px;
+  width: 350px; 
+  height: 350px; 
 }
+
 .frame {
   position: absolute;
   top: 0;
@@ -226,33 +228,36 @@ img {
   width: 100%;
   height: 100%;
   z-index: 3;
-  pointer-events: none;
-  transform: scale(1.25);
+  pointer-events: none; 
+  transform: scale(1.25); 
   transform-origin: center;
 }
+
 .reels {
   position: absolute;
-  top: 28px;
-  left: -8px;
-  width: 365px;
-  height: 350px;
+  top: 28px;    
+  left: -8px;  
+  width: 365px; 
+  height: 350px; 
   display: flex;
-  gap: 10px;
-  overflow: hidden;
+  justify-content: center; 
+  gap: 10px;    
+  overflow: hidden; 
   z-index: 2;
 }
+
 .reel {
   display: flex;
   flex-direction: column;
-  width: 85px;
+  width: 85px;  
   align-items: center;
 }
+
 .reel img {
-  width: 85px;
-  height: 85px;
+  width: 85px;  
+  height: 85px; 
   object-fit: contain;
-  margin-bottom: 18px;
-  border-radius: 12px;
+  margin-bottom: 18px; 
 }
 .sidebar {
   position: absolute;
@@ -288,15 +293,38 @@ img {
   position: relative;
   width: 90%;
   max-width: 520px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
 }
+
 .bet-bar img {
-  width: 70%;
+  width: 100%;
   transform: scale(1.5);
 }
+
+.bet-text {
+  position: absolute;
+  width: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  text-align: center;
+  color: white;
+  font-weight: bold;
+  font-size: 20px;
+}
+
+.spin-btn {
+  position: absolute;
+  right: 15px;
+  bottom: 15px;
+  width: 28%;
+  max-width: 180px;
+  z-index: 20;
+}
+
+.spin-btn img {
+  width: 100%;
+  cursor: pointer;
+}
+
 .bet-controls {
   display: flex;
   gap: 15px;
@@ -324,31 +352,6 @@ img {
   color: white;
   min-width: 50px;
   text-align: center;
-}
-.bet-text {
-  position: absolute;
-  width: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  text-align: center;
-  color: white;
-  font-weight: bold;
-  font-size: 20px;
-  pointer-events: none;
-  z-index: 1;
-}
-.spin-btn {
-  position: absolute;
-  right: 15px;
-  bottom: 15px;
-  width: 28%;
-  max-width: 180px;
-  z-index: 20;
-}
-.spin-btn img {
-  width: 100%;
-  cursor: pointer;
-  pointer-events: auto;
 }
 #winOverlay {
   display: none;
