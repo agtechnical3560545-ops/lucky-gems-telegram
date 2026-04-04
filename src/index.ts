@@ -292,12 +292,12 @@ img {
 .bet-bar {
   position: relative;
   width: 90%;
+  bottom: 15px;
   max-width: 520px;
 }
 
 .bet-bar img {
   width: 100%;
-  top: 45%;
   transform: scale(1.5);
 }
 
@@ -315,7 +315,7 @@ img {
 .spin-btn {
   position: absolute;
   right: 15px;
-  bottom: 15px;
+  bottom: 25px;
   width: 28%;
   max-width: 180px;
   z-index: 20;
