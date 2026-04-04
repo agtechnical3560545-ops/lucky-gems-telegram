@@ -292,12 +292,12 @@ img {
 .bet-bar {
   position: relative;
   width: 90%;
-  top: 45%;
   max-width: 520px;
 }
 
 .bet-bar img {
   width: 100%;
+  top: 45%;
   transform: scale(1.5);
 }
 
@@ -346,6 +346,7 @@ img {
   width: 40px;
   text-align: center;
   padding: 0;
+  z-index: 5;
 }
 .bet-controls span {
   font-size: 24px;
