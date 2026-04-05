@@ -158,7 +158,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= COMPLETE HTML/JS (Original Layout + Bet Adjust + Smooth TranslateY Spin) =======================
+// ======================= HTML CONTENT (Embedded Frontend) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -207,7 +207,6 @@ img {
   border-radius: 40px;
   border: 1px solid #ffd700;
 }
-/* MACHINE CONTAINER */
 .machine-container {
   display: flex;
   justify-content: center;
@@ -220,7 +219,6 @@ img {
   width: 350px; 
   height: 350px; 
 }
-
 .frame {
   position: absolute;
   top: 0;
@@ -232,7 +230,6 @@ img {
   transform: scale(1.25); 
   transform-origin: center;
 }
-
 .reels {
   position: absolute;
   top: 28px;    
@@ -245,14 +242,12 @@ img {
   overflow: hidden; 
   z-index: 2;
 }
-
 .reel {
   display: flex;
   flex-direction: column;
   width: 85px;  
   align-items: center;
 }
-
 .reel img {
   width: 85px;  
   height: 85px; 
@@ -295,12 +290,10 @@ img {
   top: 35px;
   max-width: 520px;
 }
-
 .bet-bar img {
   width: 100%;
   transform: scale(1.5);
 }
-
 .spin-btn {
   position: absolute;
   right: 15px;
@@ -314,7 +307,6 @@ img {
   cursor: pointer;
   pointer-events: auto;
 }
-
 .bet-controls {
   display: flex;
   gap: 15px;
@@ -323,11 +315,10 @@ img {
   padding: 5px 15px;
   border: 1px solid gold;
   z-index: 5;
-  margin-top: -75px;   /* ← ye line add karo, value adjust karna */
+  margin-top: -75px;
 }
 .bet-controls button {
   background: none;
-  4pxone;
   font-size: 28px;
   font-weight: bold;
   color: #ffd966;
@@ -526,14 +517,56 @@ let bigWinAmount = 0;
 
 const gemsList = ${JSON.stringify(GEMS)};
 
-// Sound functions
-function playSpinStartSound() {
-  const audio = document.getElementById('spin-start-sound');
-  if (audio) { audio.currentTime = 0; audio.play().catch(e => console.log(e)); }
+// ---------- Web Audio Sound (Slot Machine Style) ----------
+let audioCtx = null;
+
+function initAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
 }
-function playSpinStopSound() {
-  const audio = document.getElementById('spin-stop-sound');
-  if (audio) { audio.currentTime = 0; audio.play().catch(e => console.log(e)); }
+
+function playSpinSound() {
+  try {
+    initAudio();
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sawtooth';
+    osc.frequency.value = 800;
+    osc.frequency.exponentialRampToValueAtTime(200, now + 0.3);
+    gain.gain.value = 0.3;
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    osc.start();
+    osc.stop(now + 0.35);
+  } catch(e) { console.log("Spin sound error", e); }
+}
+
+function playWinSound() {
+  try {
+    initAudio();
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.50];
+    notes.forEach((freq, i) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.value = 0.2;
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5 + i*0.1);
+      osc.start(now + i * 0.1);
+      osc.stop(now + 0.5 + i*0.1);
+    });
+  } catch(e) { console.log("Win sound error", e); }
 }
 
 function createReel(id, arr) {
@@ -606,7 +639,7 @@ function animateReel(id, delay, finalImages) {
 
 async function spin() {
   if (isSpinning) return;
-  playSpinStartSound();
+  playSpinSound();  // 🔊 Spin start sound
   isSpinning = true;
   enableSpin(false);
   if (currentCoins < currentBet) {
@@ -641,7 +674,7 @@ async function spin() {
     ]);
     highlightWins(data.matrix);
     if (data.win > 0) {
-      playSpinStopSound();
+      playWinSound();  // 🔊 Win sound
       if (data.win >= 15) showBigWin(data.win);
       else smoothCoins(currentCoins + data.win, () => {
         isSpinning = false;
@@ -799,10 +832,7 @@ document.getElementById("submitRedeem").onclick = async () => {
 document.getElementById("spinBtn").addEventListener("click", spin);
 document.getElementById("collectBtn").addEventListener("click", closeWin);
 initAuth();
-
 </script>
-<audio id="spin-start-sound" src="https://www.pacdv.com/sounds/interface_sound_effects/spin.mp3"></audio>
-<audio id="spin-stop-sound" src="https://www.pacdv.com/sounds/interface_sound_effects/game-win-1.mp3"></audio>
 </body>
 </html>`;
 
