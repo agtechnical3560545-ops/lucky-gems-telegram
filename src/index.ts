@@ -304,7 +304,7 @@ img {
 .spin-btn {
   position: absolute;
   right: 15px;
-  margin-top: -55px;
+  margin-top: -5px;
   width: 28%;
   max-width: 180px;
   z-index: 20;
