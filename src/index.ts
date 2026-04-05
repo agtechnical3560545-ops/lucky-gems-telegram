@@ -304,7 +304,7 @@ img {
 .spin-btn {
   position: absolute;
   right: 15px;
-  margin-top: -15px;
+  margin-top: -5px;
   width: 28%;
   max-width: 180px;
   z-index: 20;
@@ -323,7 +323,7 @@ img {
   padding: 5px 15px;
   border: 1px solid gold;
   z-index: 5;
-  margin-top: -35px;   /* ← ye line add karo, value adjust karna */
+  margin-top: -55px;   /* ← ye line add karo, value adjust karna */
 }
 .bet-controls button {
   background: none;
@@ -344,6 +344,7 @@ img {
   color: white;
   min-width: 50px;
   text-align: center;
+  z-index: 5;
 }
 #winOverlay {
   display: none;
