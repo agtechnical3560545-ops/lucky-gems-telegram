@@ -158,7 +158,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML WITH CONTINUOUS SPIN SOUND (Web Audio) =======================
+// ======================= FRONTEND HTML WITH REALISTIC CASINO SOUNDS (Noise + Ticks) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -516,9 +516,12 @@ let bigWinAmount = 0;
 
 const gemsList = ${JSON.stringify(GEMS)};
 
-// ---------- Web Audio Continuous Spin Sound (plays during animation) ----------
+// ---------- REALISTIC CASINO SOUNDS (Noise + periodic ticks) ----------
 let audioCtx = null;
-let spinOscillator = null;
+let spinSource = null;
+let spinGain = null;
+let spinFilter = null;
+let spinInterval = null;
 
 function initAudio() {
   if (!audioCtx) {
@@ -529,27 +532,77 @@ function initAudio() {
   }
 }
 
+function playTick() {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.type = 'sine';
+  osc.frequency.value = 1200;
+  gain.gain.value = 0.12;
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+  osc.start();
+  osc.stop(now + 0.05);
+}
+
 function startSpinSound() {
   try {
     initAudio();
     if (!audioCtx) return;
-    // Stop any previous spin sound
-    if (spinOscillator) {
-      try { spinOscillator.stop(); } catch(e) {}
+    // stop previous
+    if (spinInterval) clearInterval(spinInterval);
+    if (spinSource) {
+      try { spinSource.stop(); } catch(e) {}
     }
     const now = audioCtx.currentTime;
-    spinOscillator = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    spinOscillator.connect(gain);
-    gain.connect(audioCtx.destination);
-    spinOscillator.type = 'sawtooth';
-    spinOscillator.frequency.value = 700;
-    spinOscillator.frequency.exponentialRampToValueAtTime(180, now + 2.5);
-    gain.gain.value = 0.3;
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
-    spinOscillator.start();
-    spinOscillator.stop(now + 2.6);
+    // noise buffer
+    const bufferSize = 4096;
+    const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const output = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      output[i] = (Math.random() * 2) - 1;
+    }
+    const noiseSource = audioCtx.createBufferSource();
+    noiseSource.buffer = noiseBuffer;
+    noiseSource.loop = true;
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 800;
+    filter.Q.value = 2;
+    const gainNode = audioCtx.createGain();
+    gainNode.gain.value = 0.28;
+    noiseSource.connect(filter);
+    filter.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+    noiseSource.start();
+    gainNode.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
+    noiseSource.stop(now + 2.6);
+    spinSource = noiseSource;
+    spinGain = gainNode;
+    spinFilter = filter;
+    let tickCount = 0;
+    spinInterval = setInterval(() => {
+      if (tickCount < 25) {
+        playTick();
+        tickCount++;
+      } else {
+        clearInterval(spinInterval);
+      }
+    }, 100);
   } catch(e) { console.log("Spin sound error", e); }
+}
+
+function stopSpinSound() {
+  if (spinInterval) clearInterval(spinInterval);
+  if (spinSource) {
+    try { spinSource.stop(); } catch(e) {}
+  }
+  spinSource = null;
+  spinGain = null;
+  spinFilter = null;
+  spinInterval = null;
 }
 
 function playWinSound() {
@@ -565,11 +618,24 @@ function playWinSound() {
       gain.connect(audioCtx.destination);
       osc.type = 'sine';
       osc.frequency.value = freq;
-      gain.gain.value = 0.2;
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5 + i*0.1);
-      osc.start(now + i * 0.1);
-      osc.stop(now + 0.5 + i*0.1);
+      gain.gain.value = 0.22;
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5 + i*0.08);
+      osc.start(now + i * 0.08);
+      osc.stop(now + 0.5 + i*0.08);
     });
+    // extra high ding
+    setTimeout(() => {
+      if (!audioCtx) return;
+      const osc2 = audioCtx.createOscillator();
+      const gain2 = audioCtx.createGain();
+      osc2.connect(gain2);
+      gain2.connect(audioCtx.destination);
+      osc2.frequency.value = 1318.52;
+      gain2.gain.value = 0.18;
+      gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+      osc2.start();
+      osc2.stop(audioCtx.currentTime + 0.3);
+    }, 200);
   } catch(e) { console.log("Win sound error", e); }
 }
 
@@ -643,7 +709,7 @@ function animateReel(id, delay, finalImages) {
 
 async function spin() {
   if (isSpinning) return;
-  startSpinSound(); // 🔊 continuous spin sound starts
+  startSpinSound(); // realistic spin sound
   isSpinning = true;
   enableSpin(false);
   if (currentCoins < currentBet) {
@@ -678,7 +744,7 @@ async function spin() {
     ]);
     highlightWins(data.matrix);
     if (data.win > 0) {
-      playWinSound(); // 🔊 win jingle
+      playWinSound();
       if (data.win >= 15) showBigWin(data.win);
       else smoothCoins(currentCoins + data.win, () => {
         isSpinning = false;
