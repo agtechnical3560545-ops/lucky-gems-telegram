@@ -49,14 +49,15 @@ async function handleAuth(request: Request, env: Env): Promise<Response> {
   if (!user) {
     const userId = crypto.randomUUID();
     const newCode = generateReferralCode();
-    let coins = 1030;
+    // ✅ Starting coins changed from 1030 to 10
+    let coins = 10;
     let referredBy: string | null = null;
     if (referCode) {
       const referrer = await env.DB.prepare("SELECT * FROM users WHERE referral_code = ?").bind(referCode).first();
       if (referrer && referrer.telegram_id !== telegramId) {
         await env.DB.prepare("UPDATE users SET coins = coins + 10 WHERE id = ?").bind(referrer.id).run();
         await env.DB.prepare("INSERT INTO referral_earnings (referrer_id, new_user_id) VALUES (?, ?)").bind(referrer.id, userId).run();
-        coins += 10;
+        coins += 10; // new user also gets +10 bonus
         referredBy = referrer.telegram_id;
       }
     }
@@ -158,7 +159,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML (with delayed spin sound) =======================
+// ======================= FRONTEND HTML (all fixes applied) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -174,7 +175,20 @@ const HTML_CONTENT = `<!DOCTYPE html>
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
+  touch-action: pan-y; /* allow vertical only, prevent horizontal scroll */
+}
+html, body {
+  overscroll-behavior: none;
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 0;
 }
 body {
   margin: 0;
@@ -184,6 +198,7 @@ body {
   background-size: cover;
   height: 100vh;
   overflow: hidden;
+  touch-action: pan-y;
 }
 img {
   -webkit-user-drag: none;
@@ -440,7 +455,7 @@ img {
 }
 </style>
 </head>
-<body oncontextmenu="return false;">
+<body oncontextmenu="return false" ontouchstart="return true">
 <div class="topbar">
   <div>👤 <span id="username">Player</span></div>
   <div class="coins">💰 <span id="coins">0.00</span></div>
@@ -470,7 +485,7 @@ img {
     </div>
   </div>
   <div class="spin-btn" id="spinBtn">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false">
   </div>
 </div>
 <div id="winOverlay">
@@ -508,6 +523,14 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
+// 🛑 Prevent left-right drag and any page movement
+document.body.addEventListener('touchmove', function(e) {
+  e.preventDefault();
+}, { passive: false });
+document.body.addEventListener('touchstart', function(e) {
+  // Allow only vertical scrolling? None actually.
+}, { passive: false });
+
 let userId = null;
 let currentCoins = 0;
 let currentBet = 1;
@@ -517,7 +540,7 @@ let spinSoundTimeout = null;
 
 const gemsList = ${JSON.stringify(GEMS)};
 
-// ---------- SIMPLE SOUNDS (No noise, only mechanical ticks with delay) ----------
+// ---------- SIMPLE SOUNDS (No noise, only mechanical ticks with 250ms delay) ----------
 let audioCtx = null;
 let tickInterval = null;
 
@@ -691,10 +714,10 @@ function animateReel(id, delay, finalImages) {
 async function spin() {
   if (isSpinning) return;
   
-  // Delay the start of ticks by 200ms
+  // Delay the start of ticks by 250ms (changed from 200 to 250)
   spinSoundTimeout = setTimeout(() => {
     startSpinTicks();
-  }, 200);
+  }, 250);
   
   isSpinning = true;
   enableSpin(false);
