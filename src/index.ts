@@ -207,7 +207,6 @@ img {
   border-radius: 40px;
   border: 1px solid #ffd700;
 }
-.machine-container {
 /* MACHINE CONTAINER */
 .machine-container {
   display: flex;
@@ -293,42 +292,30 @@ img {
 .bet-bar {
   position: relative;
   width: 90%;
+  top: 35px;
   max-width: 520px;
 }
+
 .bet-bar img {
   width: 100%;
   transform: scale(1.5);
 }
-.bet-text {
-  position: absolute;
-  width: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  text-align: center;
-  color: white;
-  font-weight: bold;
-  font-size: 20px;
-  pointer-events: none;
-  z-index: 1;
-}
+
 .spin-btn {
   position: absolute;
   right: 15px;
-  bottom: 15px;
+  margin-top: -75px
   width: 28%;
   max-width: 180px;
   z-index: 20;
 }
+
 .spin-btn img {
   width: 100%;
   cursor: pointer;
-  pointer-events: auto;
 }
+
 .bet-controls {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   display: flex;
   gap: 15px;
   background: rgba(0,0,0,0.7);
@@ -336,11 +323,11 @@ img {
   padding: 5px 15px;
   border: 1px solid gold;
   z-index: 5;
-  white-space: nowrap;
+  margin-top: -75px;   /* ← ye line add karo, value adjust karna */
 }
 .bet-controls button {
   background: none;
-  border: none;
+  4pxone;
   font-size: 28px;
   font-weight: bold;
   color: #ffd966;
@@ -349,6 +336,7 @@ img {
   width: 40px;
   text-align: center;
   padding: 0;
+  z-index: 5;
 }
 .bet-controls span {
   font-size: 24px;
@@ -356,6 +344,7 @@ img {
   color: white;
   min-width: 50px;
   text-align: center;
+  z-index: 5;
 }
 #winOverlay {
   display: none;
