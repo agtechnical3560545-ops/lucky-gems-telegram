@@ -304,15 +304,15 @@ img {
 .spin-btn {
   position: absolute;
   right: 15px;
-  margin-top: -75px
+  bottom: 15px;
   width: 28%;
   max-width: 180px;
   z-index: 20;
 }
-
 .spin-btn img {
   width: 100%;
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .bet-controls {
