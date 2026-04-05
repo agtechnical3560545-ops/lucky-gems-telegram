@@ -603,14 +603,11 @@ function animateReel(id, delay, finalImages) {
 
 async function spin() {
   if (isSpinning) return;
+  
+  playSpinStartSound(); // 🔊 spin start sound – pehle hi baje
+
   isSpinning = true;
   enableSpin(false);
-  playSpinStartSound(); // ✅ Sound add kiya - spin shuru hone par
-
-     // Win check ke andar
-    if (win > 0) {
-        playSpinStopSound(); // ✅ Sound add kiya - win hone par
-        if (win >= 15) showBigWin(win);
 
   if (currentCoins < currentBet) {
     alert("Not enough coins!");
@@ -630,7 +627,6 @@ async function spin() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
-    // adjust to actual result
     currentCoins = data.newCoins - data.win;
     updateCoins();
 
@@ -651,6 +647,33 @@ async function spin() {
       animateReel('r2', 200, finalReels[1]),
       animateReel('r3', 400, finalReels[2])
     ]);
+
+    highlightWins(data.matrix);
+
+    // 🎉 Win sound and handling
+    if (data.win > 0) {
+      playSpinStopSound(); // 🔊 win sound – sirf jeetne par
+      if (data.win >= 15) {
+        showBigWin(data.win);
+      } else {
+        smoothCoins(currentCoins + data.win, () => {
+          isSpinning = false;
+          enableSpin(true);
+          document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
+        });
+      }
+    } else {
+      isSpinning = false;
+      enableSpin(true);
+      document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
+    }
+  } catch (e) {
+    alert("Spin error: " + e.message);
+    console.error(e);
+    isSpinning = false;
+    enableSpin(true);
+  }
+}
 
     // highlight wins
     function highlightWins(mat) {
