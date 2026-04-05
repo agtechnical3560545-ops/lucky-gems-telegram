@@ -158,7 +158,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= COMPLETE HTML/JS (Original Layout + Bet Adjust + Smooth Spin) =======================
+// ======================= COMPLETE HTML/JS (Original Layout + Bet Adjust + Smooth TranslateY Spin) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -207,7 +207,6 @@ img {
   border-radius: 40px;
   border: 1px solid #ffd700;
 }
-/* MACHINE CONTAINER */
 .machine-container {
   display: flex;
   justify-content: center;
@@ -220,7 +219,6 @@ img {
   width: 350px; 
   height: 350px; 
 }
-
 .frame {
   position: absolute;
   top: 0;
@@ -228,36 +226,34 @@ img {
   width: 100%;
   height: 100%;
   z-index: 3;
-  pointer-events: none; 
-  transform: scale(1.25); 
+  pointer-events: none;
+  transform: scale(1.25);
   transform-origin: center;
 }
-
 .reels {
   position: absolute;
-  top: 28px;    
-  left: -8px;  
-  width: 365px; 
-  height: 350px; 
+  top: 28px;
+  left: -8px;
+  width: 365px;
+  height: 350px;
   display: flex;
-  justify-content: center; 
-  gap: 10px;    
-  overflow: hidden; 
+  gap: 10px;
+  overflow: hidden;
   z-index: 2;
 }
-
 .reel {
   display: flex;
   flex-direction: column;
-  width: 85px;  
+  width: 85px;
   align-items: center;
+  transition: none;
 }
-
 .reel img {
-  width: 85px;  
-  height: 85px; 
+  width: 85px;
+  height: 85px;
   object-fit: contain;
-  margin-bottom: 18px; 
+  margin-bottom: 18px;
+  border-radius: 12px;
 }
 .sidebar {
   position: absolute;
@@ -292,30 +288,42 @@ img {
 .bet-bar {
   position: relative;
   width: 90%;
-  top: 35px;
   max-width: 520px;
 }
-
 .bet-bar img {
   width: 100%;
   transform: scale(1.5);
 }
-
+.bet-text {
+  position: absolute;
+  width: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  text-align: center;
+  color: white;
+  font-weight: bold;
+  font-size: 20px;
+  pointer-events: none;
+  z-index: 1;
+}
 .spin-btn {
   position: absolute;
   right: 15px;
-  margin-top: -75px
+  bottom: 15px;
   width: 28%;
   max-width: 180px;
   z-index: 20;
 }
-
 .spin-btn img {
   width: 100%;
   cursor: pointer;
+  pointer-events: auto;
 }
-
 .bet-controls {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   gap: 15px;
   background: rgba(0,0,0,0.7);
@@ -323,7 +331,7 @@ img {
   padding: 5px 15px;
   border: 1px solid gold;
   z-index: 5;
-  margin-top: -75px;   /* ← ye line add karo, value adjust karna */
+  white-space: nowrap;
 }
 .bet-controls button {
   background: none;
@@ -336,7 +344,6 @@ img {
   width: 40px;
   text-align: center;
   padding: 0;
-  z-index: 5;
 }
 .bet-controls span {
   font-size: 24px;
@@ -344,7 +351,6 @@ img {
   color: white;
   min-width: 50px;
   text-align: center;
-  z-index: 5;
 }
 #winOverlay {
   display: none;
@@ -521,11 +527,12 @@ let userId = null;
 let currentCoins = 0;
 let currentBet = 1;
 let isSpinning = false;
+let finishedReels = 0;
 let bigWinAmount = 0;
 
 const gemsList = ${JSON.stringify(GEMS)};
 
-function createReelDom(id, arr) {
+function createReel(id, arr) {
   const reel = document.getElementById(id);
   reel.innerHTML = "";
   arr.forEach(src => {
@@ -552,7 +559,7 @@ function randomReel() {
 }
 
 function initReels() {
-  for (let i = 1; i <= 3; i++) createReelDom('r' + i, randomReel());
+  for (let i = 1; i <= 3; i++) createReel('r' + i, randomReel());
 }
 initReels();
 
@@ -566,52 +573,132 @@ function enableSpin(en) {
   btn.style.opacity = en ? "1" : "0.6";
 }
 
-async function animateSpin(finalMatrix) {
-  return new Promise(resolve => {
-    let spins = 0;
-    const totalSpins = 20;
-    const interval = setInterval(() => {
-      for (let i = 1; i <= 3; i++) {
-        createReelDom('r' + i, randomReel());
-      }
-      spins++;
-      if (spins >= totalSpins) {
-        clearInterval(interval);
-        for (let col = 0; col < 3; col++) {
-          let colImgs = [];
-          for (let row = 0; row < 3; row++) {
-            colImgs.push(finalMatrix[row][col]);
-          }
-          let full = [...colImgs, ...colImgs, ...colImgs, ...colImgs, ...colImgs].slice(0, 15);
-          createReelDom('r' + (col + 1), full);
-        }
+// Smooth translateY spin animation (exactly like original script)
+function animateReel(id, delay, finalImages) {
+  return new Promise((resolve) => {
+    const reel = document.getElementById(id);
+    const imgHeight = 85 + 18; // 85px height + 18px margin-bottom
+    const totalHeight = imgHeight * reel.children.length;
+    let start = null;
+    const duration = 2500 + delay;
+
+    function easeOut(t) {
+      return 1 - Math.pow(1 - t, 3);
+    }
+
+    function step(timestamp) {
+      if (!start) start = timestamp;
+      let progress = timestamp - start;
+      let t = Math.min(progress / duration, 1);
+      let eased = easeOut(t);
+      let move = eased * (totalHeight * 3);
+      reel.style.transform = 'translateY(' + (-move % totalHeight) + 'px)';
+      if (progress < duration) {
+        requestAnimationFrame(step);
+      } else {
+        reel.style.transform = 'translateY(0)';
+        createReel(id, finalImages);
         resolve();
       }
-    }, 50);
+    }
+    setTimeout(() => {
+      requestAnimationFrame(step);
+    }, delay);
   });
 }
 
-function highlightWins(mat) {
-  document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
-  for (let row = 0; row < 3; row++) {
-    const [a, b, c] = mat[row];
-    if (a === b && b === c) {
-      for (let col = 0; col < 3; col++) {
-        let el = document.getElementById('r' + (col + 1)).children[row];
-        if (el) el.classList.add('glow');
+async function spin() {
+  if (isSpinning) return;
+  isSpinning = true;
+  enableSpin(false);
+
+  if (currentCoins < currentBet) {
+    alert("Not enough coins!");
+    isSpinning = false;
+    enableSpin(true);
+    return;
+  }
+  currentCoins -= currentBet;
+  updateCoins();
+
+  try {
+    const res = await fetch('/api/spin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, bet: currentBet })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    // adjust to actual result
+    currentCoins = data.newCoins - data.win;
+    updateCoins();
+
+    // prepare final reel images
+    const finalReels = [];
+    for (let col = 0; col < 3; col++) {
+      let colImgs = [];
+      for (let row = 0; row < 3; row++) {
+        colImgs.push(data.matrix[row][col]);
       }
-    } else if (a === b || b === c || a === c) {
-      let pairs = [];
-      if (a === b) pairs.push([0, 1]);
-      if (b === c) pairs.push([1, 2]);
-      if (a === c) pairs.push([0, 2]);
-      for (let pair of pairs) {
-        for (let col of pair) {
-          let el = document.getElementById('r' + (col + 1)).children[row];
-          if (el) el.classList.add('glow');
+      let full = [...colImgs, ...colImgs, ...colImgs, ...colImgs, ...colImgs].slice(0, 15);
+      finalReels.push(full);
+    }
+
+    // run animations
+    await Promise.all([
+      animateReel('r1', 0, finalReels[0]),
+      animateReel('r2', 200, finalReels[1]),
+      animateReel('r3', 400, finalReels[2])
+    ]);
+
+    // highlight wins
+    function highlightWins(mat) {
+      document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
+      for (let row = 0; row < 3; row++) {
+        const [a, b, c] = mat[row];
+        if (a === b && b === c) {
+          for (let col = 0; col < 3; col++) {
+            let el = document.getElementById('r' + (col + 1)).children[row];
+            if (el) el.classList.add('glow');
+          }
+        } else if (a === b || b === c || a === c) {
+          let pairs = [];
+          if (a === b) pairs.push([0, 1]);
+          if (b === c) pairs.push([1, 2]);
+          if (a === c) pairs.push([0, 2]);
+          for (let pair of pairs) {
+            for (let col of pair) {
+              let el = document.getElementById('r' + (col + 1)).children[row];
+              if (el) el.classList.add('glow');
+            }
+          }
         }
       }
     }
+    highlightWins(data.matrix);
+
+    // handle win
+    if (data.win > 0) {
+      if (data.win >= 15) {
+        showBigWin(data.win);
+      } else {
+        smoothCoins(currentCoins + data.win, () => {
+          isSpinning = false;
+          enableSpin(true);
+          document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
+        });
+      }
+    } else {
+      isSpinning = false;
+      enableSpin(true);
+      document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
+    }
+  } catch (e) {
+    alert("Spin error: " + e.message);
+    console.error(e);
+    isSpinning = false;
+    enableSpin(true);
   }
 }
 
@@ -645,42 +732,6 @@ function closeWin() {
     enableSpin(true);
   });
   bigWinAmount = 0;
-}
-
-async function spin() {
-  if (isSpinning) return;
-  isSpinning = true;
-  enableSpin(false);
-  try {
-    const res = await fetch('/api/spin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, bet: currentBet })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error);
-    currentCoins = data.newCoins - data.win;
-    updateCoins();
-    await animateSpin(data.matrix);
-    highlightWins(data.matrix);
-    if (data.win > 0) {
-      if (data.win >= 15) showBigWin(data.win);
-      else smoothCoins(currentCoins + data.win, () => {
-        isSpinning = false;
-        enableSpin(true);
-        document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
-      });
-    } else {
-      isSpinning = false;
-      enableSpin(true);
-      document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
-    }
-  } catch (e) {
-    alert("Spin error: " + e.message);
-    console.error(e);
-    isSpinning = false;
-    enableSpin(true);
-  }
 }
 
 async function initAuth() {
