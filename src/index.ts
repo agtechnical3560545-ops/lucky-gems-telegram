@@ -860,21 +860,6 @@ document.getElementById("collectBtn").addEventListener("click", closeWin);
 
 initAuth();
 
-function playSpinStartSound() {
-    const audio = document.getElementById('spin-start-sound');
-    if (audio) {
-        audio.currentTime = 0;
-        audio.play().catch(e => console.log('Audio play error:', e));
-    }
-}
-
-function playSpinStopSound() {
-    const audio = document.getElementById('spin-stop-sound');
-    if (audio) {
-        audio.currentTime = 0;
-        audio.play().catch(e => console.log('Audio play error:', e));
-    }
-}
 </script>
 <audio id="spin-start-sound" src="https://www.pacdv.com/sounds/interface_sound_effects/spin.mp3"></audio>
 <audio id="spin-stop-sound" src="https://www.pacdv.com/sounds/interface_sound_effects/game-win-1.mp3"></audio>
