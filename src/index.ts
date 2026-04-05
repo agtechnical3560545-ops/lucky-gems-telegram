@@ -517,8 +517,10 @@ let bigWinAmount = 0;
 
 const gemsList = ${JSON.stringify(GEMS)};
 
-// ---------- Web Audio Sound (Slot Machine Style) ----------
+// ---------- Continuous Spin Sound (Web Audio) ----------
 let audioCtx = null;
+let spinOscillator = null;
+let spinGain = null;
 
 function initAudio() {
   if (!audioCtx) {
@@ -529,23 +531,44 @@ function initAudio() {
   }
 }
 
-function playSpinSound() {
+function startSpinSound() {
   try {
     initAudio();
     if (!audioCtx) return;
+    // Stop any previous spin sound
+    stopSpinSound();
+    
     const now = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.type = 'sawtooth';
-    osc.frequency.value = 800;
-    osc.frequency.exponentialRampToValueAtTime(200, now + 0.3);
-    gain.gain.value = 0.3;
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-    osc.start();
-    osc.stop(now + 0.35);
-  } catch(e) { console.log("Spin sound error", e); }
+    spinOscillator = audioCtx.createOscillator();
+    spinGain = audioCtx.createGain();
+    spinOscillator.connect(spinGain);
+    spinGain.connect(audioCtx.destination);
+    
+    spinOscillator.type = 'sawtooth';
+    spinOscillator.frequency.value = 600;
+    // Slowly descending frequency over time
+    spinOscillator.frequency.exponentialRampToValueAtTime(200, now + 2.5);
+    
+    spinGain.gain.value = 0.25;
+    // Fade out at end
+    spinGain.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
+    
+    spinOscillator.start();
+    spinOscillator.stop(now + 2.6); // stop after 2.6 sec
+  } catch(e) { console.log("Start spin sound error", e); }
+}
+
+function stopSpinSound() {
+  try {
+    if (spinOscillator) {
+      // Already stopping, just ensure
+      spinOscillator = null;
+    }
+    if (spinGain) {
+      spinGain.gain.cancelAndHoldAtTime(audioCtx.currentTime);
+      spinGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+    }
+  } catch(e) {}
 }
 
 function playWinSound() {
