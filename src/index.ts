@@ -158,7 +158,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= HTML CONTENT (Embedded Frontend) =======================
+// ======================= FRONTEND HTML WITH CONTINUOUS SPIN SOUND (Web Audio) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -512,15 +512,13 @@ let userId = null;
 let currentCoins = 0;
 let currentBet = 1;
 let isSpinning = false;
-let finishedReels = 0;
 let bigWinAmount = 0;
 
 const gemsList = ${JSON.stringify(GEMS)};
 
-// ---------- Continuous Spin Sound (Web Audio) ----------
+// ---------- Web Audio Continuous Spin Sound (plays during animation) ----------
 let audioCtx = null;
 let spinOscillator = null;
-let spinGain = null;
 
 function initAudio() {
   if (!audioCtx) {
@@ -536,39 +534,22 @@ function startSpinSound() {
     initAudio();
     if (!audioCtx) return;
     // Stop any previous spin sound
-    stopSpinSound();
-    
+    if (spinOscillator) {
+      try { spinOscillator.stop(); } catch(e) {}
+    }
     const now = audioCtx.currentTime;
     spinOscillator = audioCtx.createOscillator();
-    spinGain = audioCtx.createGain();
-    spinOscillator.connect(spinGain);
-    spinGain.connect(audioCtx.destination);
-    
+    const gain = audioCtx.createGain();
+    spinOscillator.connect(gain);
+    gain.connect(audioCtx.destination);
     spinOscillator.type = 'sawtooth';
-    spinOscillator.frequency.value = 600;
-    // Slowly descending frequency over time
-    spinOscillator.frequency.exponentialRampToValueAtTime(200, now + 2.5);
-    
-    spinGain.gain.value = 0.25;
-    // Fade out at end
-    spinGain.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
-    
+    spinOscillator.frequency.value = 700;
+    spinOscillator.frequency.exponentialRampToValueAtTime(180, now + 2.5);
+    gain.gain.value = 0.3;
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
     spinOscillator.start();
-    spinOscillator.stop(now + 2.6); // stop after 2.6 sec
-  } catch(e) { console.log("Start spin sound error", e); }
-}
-
-function stopSpinSound() {
-  try {
-    if (spinOscillator) {
-      // Already stopping, just ensure
-      spinOscillator = null;
-    }
-    if (spinGain) {
-      spinGain.gain.cancelAndHoldAtTime(audioCtx.currentTime);
-      spinGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
-    }
-  } catch(e) {}
+    spinOscillator.stop(now + 2.6);
+  } catch(e) { console.log("Spin sound error", e); }
 }
 
 function playWinSound() {
@@ -662,7 +643,7 @@ function animateReel(id, delay, finalImages) {
 
 async function spin() {
   if (isSpinning) return;
-  playSpinSound();  // 🔊 Spin start sound
+  startSpinSound(); // 🔊 continuous spin sound starts
   isSpinning = true;
   enableSpin(false);
   if (currentCoins < currentBet) {
@@ -697,7 +678,7 @@ async function spin() {
     ]);
     highlightWins(data.matrix);
     if (data.win > 0) {
-      playWinSound();  // 🔊 Win sound
+      playWinSound(); // 🔊 win jingle
       if (data.win >= 15) showBigWin(data.win);
       else smoothCoins(currentCoins + data.win, () => {
         isSpinning = false;
