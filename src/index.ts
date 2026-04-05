@@ -605,6 +605,12 @@ async function spin() {
   if (isSpinning) return;
   isSpinning = true;
   enableSpin(false);
+  playSpinStartSound(); // ✅ Sound add kiya - spin shuru hone par
+
+     // Win check ke andar
+    if (win > 0) {
+        playSpinStopSound(); // ✅ Sound add kiya - win hone par
+        if (win >= 15) showBigWin(win);
 
   if (currentCoins < currentBet) {
     alert("Not enough coins!");
@@ -830,7 +836,25 @@ document.getElementById("spinBtn").addEventListener("click", spin);
 document.getElementById("collectBtn").addEventListener("click", closeWin);
 
 initAuth();
+
+function playSpinStartSound() {
+    const audio = document.getElementById('spin-start-sound');
+    if (audio) {
+        audio.currentTime = 0;
+        audio.play().catch(e => console.log('Audio play error:', e));
+    }
+}
+
+function playSpinStopSound() {
+    const audio = document.getElementById('spin-stop-sound');
+    if (audio) {
+        audio.currentTime = 0;
+        audio.play().catch(e => console.log('Audio play error:', e));
+    }
+}
 </script>
+<audio id="spin-start-sound" src="https://www.pacdv.com/sounds/interface_sound_effects/spin.mp3"></audio>
+<audio id="spin-stop-sound" src="https://www.pacdv.com/sounds/interface_sound_effects/game-win-1.mp3"></audio>
 </body>
 </html>`;
 
