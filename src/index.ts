@@ -208,6 +208,8 @@ img {
   border: 1px solid #ffd700;
 }
 .machine-container {
+/* MACHINE CONTAINER */
+.machine-container {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -219,6 +221,7 @@ img {
   width: 350px; 
   height: 350px; 
 }
+
 .frame {
   position: absolute;
   top: 0;
@@ -226,34 +229,36 @@ img {
   width: 100%;
   height: 100%;
   z-index: 3;
-  pointer-events: none;
-  transform: scale(1.25);
+  pointer-events: none; 
+  transform: scale(1.25); 
   transform-origin: center;
 }
+
 .reels {
   position: absolute;
-  top: 28px;
-  left: -8px;
-  width: 365px;
-  height: 350px;
+  top: 28px;    
+  left: -8px;  
+  width: 365px; 
+  height: 350px; 
   display: flex;
-  gap: 10px;
-  overflow: hidden;
+  justify-content: center; 
+  gap: 10px;    
+  overflow: hidden; 
   z-index: 2;
 }
+
 .reel {
   display: flex;
   flex-direction: column;
-  width: 85px;
+  width: 85px;  
   align-items: center;
-  transition: none;
 }
+
 .reel img {
-  width: 85px;
-  height: 85px;
+  width: 85px;  
+  height: 85px; 
   object-fit: contain;
-  margin-bottom: 18px;
-  border-radius: 12px;
+  margin-bottom: 18px; 
 }
 .sidebar {
   position: absolute;
