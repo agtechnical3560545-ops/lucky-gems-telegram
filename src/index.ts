@@ -158,7 +158,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML WITH REALISTIC CASINO SOUNDS (Noise + Ticks) =======================
+// ======================= FRONTEND HTML WITH ALL SOUNDS (Click + Continuous Spin + Win) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -516,11 +516,9 @@ let bigWinAmount = 0;
 
 const gemsList = ${JSON.stringify(GEMS)};
 
-// ---------- REALISTIC CASINO SOUNDS (Noise + periodic ticks) ----------
+// ---------- ALL SOUNDS (Web Audio) ----------
 let audioCtx = null;
 let spinSource = null;
-let spinGain = null;
-let spinFilter = null;
 let spinInterval = null;
 
 function initAudio() {
@@ -532,32 +530,33 @@ function initAudio() {
   }
 }
 
-function playTick() {
-  if (!audioCtx) return;
-  const now = audioCtx.currentTime;
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-  osc.connect(gain);
-  gain.connect(audioCtx.destination);
-  osc.type = 'sine';
-  osc.frequency.value = 1200;
-  gain.gain.value = 0.12;
-  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-  osc.start();
-  osc.stop(now + 0.05);
+// Wood click sound for buttons
+function playClickSound() {
+  try {
+    initAudio();
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = 800;
+    gain.gain.value = 0.2;
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    osc.start();
+    osc.stop(now + 0.08);
+  } catch(e) { console.log("Click sound error", e); }
 }
 
+// Continuous spin sound (filtered noise + ticks)
 function startSpinSound() {
   try {
     initAudio();
     if (!audioCtx) return;
-    // stop previous
-    if (spinInterval) clearInterval(spinInterval);
-    if (spinSource) {
-      try { spinSource.stop(); } catch(e) {}
-    }
+    stopSpinSound();
     const now = audioCtx.currentTime;
-    // noise buffer
+    // noise source
     const bufferSize = 4096;
     const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
     const output = noiseBuffer.getChannelData(0);
@@ -572,7 +571,7 @@ function startSpinSound() {
     filter.frequency.value = 800;
     filter.Q.value = 2;
     const gainNode = audioCtx.createGain();
-    gainNode.gain.value = 0.28;
+    gainNode.gain.value = 0.3;
     noiseSource.connect(filter);
     filter.connect(gainNode);
     gainNode.connect(audioCtx.destination);
@@ -580,12 +579,20 @@ function startSpinSound() {
     gainNode.gain.exponentialRampToValueAtTime(0.001, now + 2.5);
     noiseSource.stop(now + 2.6);
     spinSource = noiseSource;
-    spinGain = gainNode;
-    spinFilter = filter;
+    // ticks every 100ms
     let tickCount = 0;
     spinInterval = setInterval(() => {
       if (tickCount < 25) {
-        playTick();
+        const tickOsc = audioCtx.createOscillator();
+        const tickGain = audioCtx.createGain();
+        tickOsc.connect(tickGain);
+        tickGain.connect(audioCtx.destination);
+        tickOsc.type = 'sine';
+        tickOsc.frequency.value = 1200;
+        tickGain.gain.value = 0.1;
+        tickGain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.05);
+        tickOsc.start();
+        tickOsc.stop(audioCtx.currentTime + 0.05);
         tickCount++;
       } else {
         clearInterval(spinInterval);
@@ -598,11 +605,8 @@ function stopSpinSound() {
   if (spinInterval) clearInterval(spinInterval);
   if (spinSource) {
     try { spinSource.stop(); } catch(e) {}
+    spinSource = null;
   }
-  spinSource = null;
-  spinGain = null;
-  spinFilter = null;
-  spinInterval = null;
 }
 
 function playWinSound() {
@@ -618,23 +622,23 @@ function playWinSound() {
       gain.connect(audioCtx.destination);
       osc.type = 'sine';
       osc.frequency.value = freq;
-      gain.gain.value = 0.22;
+      gain.gain.value = 0.25;
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5 + i*0.08);
       osc.start(now + i * 0.08);
       osc.stop(now + 0.5 + i*0.08);
     });
-    // extra high ding
     setTimeout(() => {
-      if (!audioCtx) return;
-      const osc2 = audioCtx.createOscillator();
-      const gain2 = audioCtx.createGain();
-      osc2.connect(gain2);
-      gain2.connect(audioCtx.destination);
-      osc2.frequency.value = 1318.52;
-      gain2.gain.value = 0.18;
-      gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
-      osc2.start();
-      osc2.stop(audioCtx.currentTime + 0.3);
+      if (audioCtx) {
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        osc2.frequency.value = 1318.52;
+        gain2.gain.value = 0.2;
+        gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        osc2.start();
+        osc2.stop(audioCtx.currentTime + 0.3);
+      }
     }, 200);
   } catch(e) { console.log("Win sound error", e); }
 }
@@ -709,7 +713,8 @@ function animateReel(id, delay, finalImages) {
 
 async function spin() {
   if (isSpinning) return;
-  startSpinSound(); // realistic spin sound
+  playClickSound(); // button click sound
+  startSpinSound(); // continuous spin sound
   isSpinning = true;
   enableSpin(false);
   if (currentCoins < currentBet) {
@@ -840,32 +845,43 @@ async function initAuth() {
   window.referralLink = "https://t.me/" + botUsername + "?startapp=" + data.referralCode;
 }
 
-// Bet controls
+// Bet controls with click sound
 document.getElementById("betPlus").onclick = () => {
+  playClickSound();
   if (currentBet < 10) { currentBet++; document.getElementById("betValue").innerText = currentBet; }
 };
 document.getElementById("betMinus").onclick = () => {
+  playClickSound();
   if (currentBet > 1) { currentBet--; document.getElementById("betValue").innerText = currentBet; }
 };
 
-// Referral modal
+// Referral modal with click sound
 document.getElementById("referBtn").onclick = () => {
+  playClickSound();
   document.getElementById("referLinkDisplay").innerText = window.referralLink || "Loading...";
   document.getElementById("referModal").style.display = "flex";
 };
 document.getElementById("copyReferLink").onclick = () => {
+  playClickSound();
   const link = window.referralLink;
   if (link) { navigator.clipboard.writeText(link); alert("Referral link copied!"); }
   else alert("Loading, please try again.");
 };
-document.getElementById("closeReferModal").onclick = () => document.getElementById("referModal").style.display = "none";
+document.getElementById("closeReferModal").onclick = () => {
+  playClickSound();
+  document.getElementById("referModal").style.display = "none";
+};
 
-// Redeem modal
+// Redeem modal with click sound
 document.getElementById("redeemBtn").onclick = () => {
+  playClickSound();
   document.getElementById("redeemModal").style.display = "flex";
   document.getElementById("redeemMsg").innerText = "";
 };
-document.getElementById("closeRedeemModal").onclick = () => document.getElementById("redeemModal").style.display = "none";
+document.getElementById("closeRedeemModal").onclick = () => {
+  playClickSound();
+  document.getElementById("redeemModal").style.display = "none";
+};
 document.getElementById("redeemType").onchange = function() {
   if (this.value === "freediamond") {
     document.getElementById("emailField").style.display = "none";
@@ -876,6 +892,7 @@ document.getElementById("redeemType").onchange = function() {
   }
 };
 document.getElementById("submitRedeem").onclick = async () => {
+  playClickSound();
   const type = document.getElementById("redeemType").value;
   let email = null, uid = null;
   if (type === "freediamond") {
