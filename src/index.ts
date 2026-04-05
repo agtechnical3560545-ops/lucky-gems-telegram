@@ -158,7 +158,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML (NO NOISE, ONLY MECHANICAL TICKS EXACTLY AT SPIN START) =======================
+// ======================= FRONTEND HTML (with delayed spin sound) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -513,10 +513,11 @@ let currentCoins = 0;
 let currentBet = 1;
 let isSpinning = false;
 let bigWinAmount = 0;
+let spinSoundTimeout = null;
 
 const gemsList = ${JSON.stringify(GEMS)};
 
-// ---------- SIMPLE SOUNDS (No noise, only ticks exactly at spin start) ----------
+// ---------- SIMPLE SOUNDS (No noise, only mechanical ticks with delay) ----------
 let audioCtx = null;
 let tickInterval = null;
 
@@ -689,14 +690,19 @@ function animateReel(id, delay, finalImages) {
 
 async function spin() {
   if (isSpinning) return;
-  // Start mechanical ticks exactly at spin start
-  startSpinTicks();
+  
+  // Delay the start of ticks by 200ms
+  spinSoundTimeout = setTimeout(() => {
+    startSpinTicks();
+  }, 200);
+  
   isSpinning = true;
   enableSpin(false);
   if (currentCoins < currentBet) {
     alert("Not enough coins!");
     isSpinning = false;
     enableSpin(true);
+    if (spinSoundTimeout) clearTimeout(spinSoundTimeout);
     return;
   }
   currentCoins -= currentBet;
@@ -724,6 +730,7 @@ async function spin() {
       animateReel('r3', 400, finalReels[2])
     ]);
     // Stop ticks after animation
+    if (spinSoundTimeout) clearTimeout(spinSoundTimeout);
     stopSpinTicks();
     highlightWins(data.matrix);
     if (data.win > 0) {
@@ -744,6 +751,7 @@ async function spin() {
     console.error(e);
     isSpinning = false;
     enableSpin(true);
+    if (spinSoundTimeout) clearTimeout(spinSoundTimeout);
     stopSpinTicks();
   }
 }
