@@ -526,6 +526,16 @@ let bigWinAmount = 0;
 
 const gemsList = ${JSON.stringify(GEMS)};
 
+// Sound functions
+function playSpinStartSound() {
+  const audio = document.getElementById('spin-start-sound');
+  if (audio) { audio.currentTime = 0; audio.play().catch(e => console.log(e)); }
+}
+function playSpinStopSound() {
+  const audio = document.getElementById('spin-stop-sound');
+  if (audio) { audio.currentTime = 0; audio.play().catch(e => console.log(e)); }
+}
+
 function createReel(id, arr) {
   const reel = document.getElementById(id);
   reel.innerHTML = "";
@@ -567,19 +577,14 @@ function enableSpin(en) {
   btn.style.opacity = en ? "1" : "0.6";
 }
 
-// Smooth translateY spin animation (exactly like original script)
 function animateReel(id, delay, finalImages) {
   return new Promise((resolve) => {
     const reel = document.getElementById(id);
-    const imgHeight = 85 + 18; // 85px height + 18px margin-bottom
+    const imgHeight = 85 + 18;
     const totalHeight = imgHeight * reel.children.length;
     let start = null;
     const duration = 2500 + delay;
-
-    function easeOut(t) {
-      return 1 - Math.pow(1 - t, 3);
-    }
-
+    function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
     function step(timestamp) {
       if (!start) start = timestamp;
       let progress = timestamp - start;
@@ -595,20 +600,15 @@ function animateReel(id, delay, finalImages) {
         resolve();
       }
     }
-    setTimeout(() => {
-      requestAnimationFrame(step);
-    }, delay);
+    setTimeout(() => requestAnimationFrame(step), delay);
   });
 }
 
 async function spin() {
   if (isSpinning) return;
-  
-  playSpinStartSound(); // 🔊 spin start sound – pehle hi baje
-
+  playSpinStartSound();
   isSpinning = true;
   enableSpin(false);
-
   if (currentCoins < currentBet) {
     alert("Not enough coins!");
     isSpinning = false;
@@ -617,7 +617,6 @@ async function spin() {
   }
   currentCoins -= currentBet;
   updateCoins();
-
   try {
     const res = await fetch('/api/spin', {
       method: 'POST',
@@ -626,42 +625,29 @@ async function spin() {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
-
     currentCoins = data.newCoins - data.win;
     updateCoins();
-
-    // prepare final reel images
     const finalReels = [];
     for (let col = 0; col < 3; col++) {
       let colImgs = [];
-      for (let row = 0; row < 3; row++) {
-        colImgs.push(data.matrix[row][col]);
-      }
+      for (let row = 0; row < 3; row++) colImgs.push(data.matrix[row][col]);
       let full = [...colImgs, ...colImgs, ...colImgs, ...colImgs, ...colImgs].slice(0, 15);
       finalReels.push(full);
     }
-
-    // run animations
     await Promise.all([
       animateReel('r1', 0, finalReels[0]),
       animateReel('r2', 200, finalReels[1]),
       animateReel('r3', 400, finalReels[2])
     ]);
-
     highlightWins(data.matrix);
-
-    // 🎉 Win sound and handling
     if (data.win > 0) {
-      playSpinStopSound(); // 🔊 win sound – sirf jeetne par
-      if (data.win >= 15) {
-        showBigWin(data.win);
-      } else {
-        smoothCoins(currentCoins + data.win, () => {
-          isSpinning = false;
-          enableSpin(true);
-          document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
-        });
-      }
+      playSpinStopSound();
+      if (data.win >= 15) showBigWin(data.win);
+      else smoothCoins(currentCoins + data.win, () => {
+        isSpinning = false;
+        enableSpin(true);
+        document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
+      });
     } else {
       isSpinning = false;
       enableSpin(true);
@@ -675,53 +661,27 @@ async function spin() {
   }
 }
 
-    // highlight wins
-    function highlightWins(mat) {
-      document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
-      for (let row = 0; row < 3; row++) {
-        const [a, b, c] = mat[row];
-        if (a === b && b === c) {
-          for (let col = 0; col < 3; col++) {
-            let el = document.getElementById('r' + (col + 1)).children[row];
-            if (el) el.classList.add('glow');
-          }
-        } else if (a === b || b === c || a === c) {
-          let pairs = [];
-          if (a === b) pairs.push([0, 1]);
-          if (b === c) pairs.push([1, 2]);
-          if (a === c) pairs.push([0, 2]);
-          for (let pair of pairs) {
-            for (let col of pair) {
-              let el = document.getElementById('r' + (col + 1)).children[row];
-              if (el) el.classList.add('glow');
-            }
-          }
+function highlightWins(mat) {
+  document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
+  for (let row = 0; row < 3; row++) {
+    const [a, b, c] = mat[row];
+    if (a === b && b === c) {
+      for (let col = 0; col < 3; col++) {
+        let el = document.getElementById('r' + (col + 1)).children[row];
+        if (el) el.classList.add('glow');
+      }
+    } else if (a === b || b === c || a === c) {
+      let pairs = [];
+      if (a === b) pairs.push([0, 1]);
+      if (b === c) pairs.push([1, 2]);
+      if (a === c) pairs.push([0, 2]);
+      for (let pair of pairs) {
+        for (let col of pair) {
+          let el = document.getElementById('r' + (col + 1)).children[row];
+          if (el) el.classList.add('glow');
         }
       }
     }
-    highlightWins(data.matrix);
-
-    // handle win
-    if (data.win > 0) {
-      if (data.win >= 15) {
-        showBigWin(data.win);
-      } else {
-        smoothCoins(currentCoins + data.win, () => {
-          isSpinning = false;
-          enableSpin(true);
-          document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
-        });
-      }
-    } else {
-      isSpinning = false;
-      enableSpin(true);
-      document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
-    }
-  } catch (e) {
-    alert("Spin error: " + e.message);
-    console.error(e);
-    isSpinning = false;
-    enableSpin(true);
   }
 }
 
@@ -759,10 +719,7 @@ function closeWin() {
 
 async function initAuth() {
   const u = tg.initDataUnsafe?.user;
-  if (!u) {
-    alert("Open from Telegram");
-    return;
-  }
+  if (!u) { alert("Open from Telegram"); return; }
   const telegramId = u.id.toString();
   const urlParams = new URLSearchParams(location.search);
   const ref = urlParams.get('startapp');
@@ -782,16 +739,10 @@ async function initAuth() {
 
 // Bet controls
 document.getElementById("betPlus").onclick = () => {
-  if (currentBet < 10) {
-    currentBet++;
-    document.getElementById("betValue").innerText = currentBet;
-  }
+  if (currentBet < 10) { currentBet++; document.getElementById("betValue").innerText = currentBet; }
 };
 document.getElementById("betMinus").onclick = () => {
-  if (currentBet > 1) {
-    currentBet--;
-    document.getElementById("betValue").innerText = currentBet;
-  }
+  if (currentBet > 1) { currentBet--; document.getElementById("betValue").innerText = currentBet; }
 };
 
 // Referral modal
@@ -801,25 +752,17 @@ document.getElementById("referBtn").onclick = () => {
 };
 document.getElementById("copyReferLink").onclick = () => {
   const link = window.referralLink;
-  if (link) {
-    navigator.clipboard.writeText(link);
-    alert("Referral link copied!");
-  } else {
-    alert("Loading, please try again.");
-  }
+  if (link) { navigator.clipboard.writeText(link); alert("Referral link copied!"); }
+  else alert("Loading, please try again.");
 };
-document.getElementById("closeReferModal").onclick = () => {
-  document.getElementById("referModal").style.display = "none";
-};
+document.getElementById("closeReferModal").onclick = () => document.getElementById("referModal").style.display = "none";
 
 // Redeem modal
 document.getElementById("redeemBtn").onclick = () => {
   document.getElementById("redeemModal").style.display = "flex";
   document.getElementById("redeemMsg").innerText = "";
 };
-document.getElementById("closeRedeemModal").onclick = () => {
-  document.getElementById("redeemModal").style.display = "none";
-};
+document.getElementById("closeRedeemModal").onclick = () => document.getElementById("redeemModal").style.display = "none";
 document.getElementById("redeemType").onchange = function() {
   if (this.value === "freediamond") {
     document.getElementById("emailField").style.display = "none";
@@ -850,14 +793,11 @@ document.getElementById("submitRedeem").onclick = async () => {
     updateCoins();
     alert("Redemption request submitted!");
     document.getElementById("redeemModal").style.display = "none";
-  } else {
-    alert(data.error);
-  }
+  } else alert(data.error);
 };
 
 document.getElementById("spinBtn").addEventListener("click", spin);
 document.getElementById("collectBtn").addEventListener("click", closeWin);
-
 initAuth();
 
 </script>
