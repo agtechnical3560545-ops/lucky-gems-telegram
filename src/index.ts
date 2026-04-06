@@ -230,7 +230,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML (Original Sidebar + No Long Press) =======================
+// ======================= FRONTEND HTML (Long Press Fixed + Original Sidebar) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -271,12 +271,13 @@ body {
   overflow: hidden;
   touch-action: pan-y;
 }
-/* Prevent any context menu / long press popup on all images */
-img, .spin-btn img, .action-btn img, .sidebtn {
-  -webkit-touch-callout: none;
+/* Force disable long press on all images and buttons */
+img, .spin-btn img, .action-btn img, .sidebtn, .drawer-btn, .casino-btn {
+  -webkit-touch-callout: none !important;
   pointer-events: auto;
-  -webkit-user-drag: none;
-  user-drag: none;
+  -webkit-user-drag: none !important;
+  user-drag: none !important;
+  user-select: none !important;
 }
 .topbar {
   display: flex;
@@ -603,7 +604,7 @@ img, .spin-btn img, .action-btn img, .sidebtn {
     <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false">
   </div>
   <div class="action-btn" id="unlockBtn">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/unlock-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
   </div>
 </div>
 <div id="winOverlay"><div class="win-box"><h1 class="win-title">BIG WIN!</h1><div class="win-amount" id="winLabel">+0</div><button class="collect-btn" id="collectBtn">COLLECT</button></div></div>
@@ -618,17 +619,27 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
-// ---------- Prevent any long press popup on all images ----------
-document.querySelectorAll('img').forEach(img => {
-  img.addEventListener('contextmenu', (e) => e.preventDefault());
-  img.addEventListener('dragstart', (e) => e.preventDefault());
-  img.setAttribute('draggable', 'false');
-});
-document.querySelectorAll('.sidebtn, .action-btn img').forEach(el => {
+// ---------- Function to disable long press on any image or element ----------
+function disableLongPress(el) {
+  if (!el) return;
+  el.setAttribute('draggable', 'false');
   el.addEventListener('contextmenu', (e) => e.preventDefault());
+  el.addEventListener('dragstart', (e) => e.preventDefault());
+}
+// Apply to all existing images and buttons
+document.querySelectorAll('img, .sidebtn, .action-btn img, .casino-btn, .collect-btn').forEach(disableLongPress);
+// MutationObserver to catch dynamically added images (during spin)
+const observer = new MutationObserver((mutations) => {
+  mutations.forEach((mutation) => {
+    mutation.addedNodes.forEach((node) => {
+      if (node.nodeType === 1) { // element node
+        if (node.tagName === 'IMG') disableLongPress(node);
+        node.querySelectorAll && node.querySelectorAll('img, .sidebtn, .action-btn img, .casino-btn, .collect-btn').forEach(disableLongPress);
+      }
+    });
+  });
 });
-// Also prevent global context menu
-document.body.addEventListener('contextmenu', (e) => e.preventDefault());
+observer.observe(document.body, { childList: true, subtree: true });
 
 // ---------- Loading overlay control ----------
 const loadingOverlay = document.getElementById('loadingOverlay');
@@ -746,6 +757,7 @@ function createReel(id, arr) {
     let img = document.createElement("img");
     img.src = src;
     img.draggable = false;
+    img.setAttribute('oncontextmenu', 'return false');
     reel.appendChild(img);
   });
 }
