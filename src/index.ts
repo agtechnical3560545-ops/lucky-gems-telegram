@@ -43,7 +43,6 @@ function generateReferralCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-// ------------------------- AUTH -------------------------
 async function handleAuth(request: Request, env: Env): Promise<Response> {
   const { telegramId, referCode } = await request.json() as any;
   if (!telegramId) return Response.json({ error: "telegramId required" }, { status: 400 });
@@ -82,7 +81,6 @@ async function handleUnlock(request: Request, env: Env): Promise<Response> {
   const { userId } = await request.json() as { userId: string };
   if (!userId) return Response.json({ error: "userId required" }, { status: 400 });
 
-  // Check if already unlocked within last 24 hours
   const existing = await env.DB.prepare("SELECT last_unlock_at FROM unlocks WHERE user_id = ? ORDER BY last_unlock_at DESC LIMIT 1").bind(userId).first();
   if (existing) {
     const last = new Date(existing.last_unlock_at);
@@ -93,7 +91,6 @@ async function handleUnlock(request: Request, env: Env): Promise<Response> {
     }
   }
 
-  // Generate unique token
   const token = crypto.randomUUID();
   const gameBaseUrl = env.WEBAPP_URL;
   const callbackUrl = `${gameBaseUrl}?unlock_token=${token}&userId=${userId}`;
@@ -105,9 +102,8 @@ async function handleUnlock(request: Request, env: Env): Promise<Response> {
     if (!shortLink || shortLink.includes("error")) {
       throw new Error("ShrinkMe API failed");
     }
-    // Store unlock record
     await env.DB.prepare("INSERT INTO unlocks (user_id, unlock_token, last_unlock_at) VALUES (?, ?, ?)")
-      .bind(userId, token, new Date().toISOString()).run();
+      .bind(userId, token, new Date(0).toISOString()).run(); // pending unlock
     return Response.json({ success: true, shortLink, token });
   } catch (e) {
     console.error(e);
@@ -120,7 +116,6 @@ async function handleConfirmUnlock(request: Request, env: Env): Promise<Response
   if (!userId || !token) return Response.json({ error: "Missing params" }, { status: 400 });
   const record = await env.DB.prepare("SELECT * FROM unlocks WHERE user_id = ? AND unlock_token = ?").bind(userId, token).first();
   if (!record) return Response.json({ error: "Invalid or expired token" }, { status: 400 });
-  // Update last_unlock_at to now
   await env.DB.prepare("UPDATE unlocks SET last_unlock_at = CURRENT_TIMESTAMP WHERE user_id = ? AND unlock_token = ?").bind(userId, token).run();
   return Response.json({ success: true });
 }
@@ -144,7 +139,6 @@ async function handleSpin(request: Request, env: Env): Promise<Response> {
   if (!user) return Response.json({ error: "User not found" }, { status: 404 });
   if (user.coins < bet) return Response.json({ error: "Insufficient coins" }, { status: 400 });
 
-  // Check unlock status
   const unlockRecord = await env.DB.prepare("SELECT last_unlock_at FROM unlocks WHERE user_id = ? ORDER BY last_unlock_at DESC LIMIT 1").bind(userId).first();
   let isUnlocked = false;
   if (unlockRecord) {
@@ -235,7 +229,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML WITH UNLOCK BUTTON =======================
+// ======================= FRONTEND HTML (Sliding Drawer + Non-bypassable Unlock) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -280,6 +274,10 @@ img {
   -webkit-user-drag: none;
   user-drag: none;
   pointer-events: none;
+}
+img, .spin-btn img, .action-btn img {
+  -webkit-touch-callout: none;
+  pointer-events: auto;
 }
 .topbar {
   display: flex;
@@ -345,25 +343,64 @@ img {
   object-fit: contain;
   margin-bottom: 18px; 
 }
-.sidebar {
-  position: absolute;
-  right: 5px;
+/* Sliding drawer */
+.drawer-tab {
+  position: fixed;
+  right: 0;
   top: 50%;
   transform: translateY(-50%);
+  width: 30px;
+  height: 80px;
+  background: linear-gradient(135deg, #ffb300, #fb8c00);
+  border-radius: 20px 0 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 100;
+  box-shadow: -2px 2px 10px rgba(0,0,0,0.3);
+  transition: 0.2s;
+}
+.drawer-tab span {
+  writing-mode: vertical-rl;
+  font-size: 14px;
+  font-weight: bold;
+  color: #1f1a0a;
+}
+.drawer {
+  position: fixed;
+  right: -200px;
+  top: 0;
+  width: 200px;
+  height: 100%;
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(12px);
+  z-index: 200;
+  transition: right 0.3s ease;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  z-index: 4;
+  padding: 80px 20px 20px;
+  gap: 25px;
+  border-left: 2px solid gold;
+  box-shadow: -5px 0 20px rgba(0,0,0,0.5);
 }
-.sidebtn {
+.drawer.open {
+  right: 0;
+}
+.drawer-btn {
   background: linear-gradient(180deg, #9c27b0, #4a148c);
-  padding: 12px 8px;
-  border-radius: 8px;
+  padding: 15px 10px;
+  border-radius: 40px;
   color: white;
   text-align: center;
-  font-size: 12px;
-  border: 1px solid #ffffff50;
+  font-size: 18px;
+  font-weight: bold;
+  border: 1px solid #ffd700;
   cursor: pointer;
+  transition: 0.1s;
+}
+.drawer-btn:active {
+  transform: scale(0.97);
 }
 .controls {
   position: fixed;
@@ -385,7 +422,6 @@ img {
   width: 100%;
   transform: scale(1.5);
 }
-/* Common button style for both spin and unlock */
 .action-btn {
   position: absolute;
   right: 15px;
@@ -474,6 +510,11 @@ img {
   filter: drop-shadow(0 0 15px gold) brightness(1.2);
   transform: scale(1.05);
 }
+@keyframes popIn {
+  0% { transform: scale(0.2); opacity: 0; }
+  80% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
 .modal {
   display: none;
   position: fixed;
@@ -525,11 +566,6 @@ img {
   font-weight: bold;
   cursor: pointer;
 }
-@keyframes popIn {
-  0% { transform: scale(0.2); opacity: 0; }
-  80% { transform: scale(1.05); }
-  100% { transform: scale(1); opacity: 1; }
-}
 </style>
 </head>
 <body oncontextmenu="return false" ontouchstart="return true">
@@ -546,10 +582,6 @@ img {
       <div class="reel" id="r3"></div>
     </div>
   </div>
-  <div class="sidebar">
-    <div class="sidebtn" id="referBtn">🔗 REFER</div>
-    <div class="sidebtn" id="redeemBtn">🎁 REDEEM</div>
-  </div>
 </div>
 <div class="controls">
   <div class="bet-bar">
@@ -561,53 +593,38 @@ img {
       <button id="betPlus">+</button>
     </div>
   </div>
-  <!-- Spin button (initially hidden) -->
   <div class="action-btn" id="spinBtn" style="display: none;">
     <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false">
   </div>
-  <!-- Unlock button (initially visible) – using same spin button image, you can replace with unlock-btn.png if needed -->
   <div class="action-btn" id="unlockBtn">
     <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
   </div>
 </div>
-<div id="winOverlay">
-  <div class="win-box">
-    <h1 class="win-title">BIG WIN!</h1>
-    <div class="win-amount" id="winLabel">+0</div>
-    <button class="collect-btn" id="collectBtn">COLLECT</button>
-  </div>
+<div class="drawer-tab" id="drawerTab"><span>🎁 MENU</span></div>
+<div class="drawer" id="drawer">
+  <div class="drawer-btn" id="drawerReferBtn">🔗 REFER</div>
+  <div class="drawer-btn" id="drawerRedeemBtn">🎁 REDEEM</div>
 </div>
-<div id="referModal" class="modal">
-  <div class="modal-content">
-    <div style="font-size:24px;">🔗 YOUR REFERRAL LINK</div>
-    <div class="refer-code-box" id="referLinkDisplay">Loading...</div>
-    <button class="casino-btn" id="copyReferLink">COPY LINK</button>
-    <button class="casino-btn" id="closeReferModal">CLOSE</button>
-  </div>
-</div>
-<div id="redeemModal" class="modal">
-  <div class="modal-content">
-    <div style="font-size:24px;">🎁 REDEEM</div>
-    <select id="redeemType" class="casino-select">
-      <option value="amazon">Amazon Gift Voucher (500 coins)</option>
-      <option value="googleplay">Google Play Voucher (500 coins)</option>
-      <option value="freediamond">Free Fire 500 Diamonds (420 coins)</option>
-    </select>
-    <div id="emailField"><input type="email" id="redeemEmail" placeholder="Email" class="casino-input"></div>
-    <div id="uidField" style="display:none"><input type="text" id="redeemUid" placeholder="Free Fire UID" class="casino-input"></div>
-    <button id="submitRedeem" class="casino-btn">REDEEM</button>
-    <button id="closeRedeemModal" class="casino-btn">CANCEL</button>
-    <p id="redeemMsg"></p>
-  </div>
-</div>
+<div id="winOverlay"><div class="win-box"><h1 class="win-title">BIG WIN!</h1><div class="win-amount" id="winLabel">+0</div><button class="collect-btn" id="collectBtn">COLLECT</button></div></div>
+<div id="referModal" class="modal"><div class="modal-content"><div style="font-size:24px;">🔗 YOUR REFERRAL LINK</div><div class="refer-code-box" id="referLinkDisplay">Loading...</div><button class="casino-btn" id="copyReferLink">COPY LINK</button><button class="casino-btn" id="closeReferModal">CLOSE</button></div></div>
+<div id="redeemModal" class="modal"><div class="modal-content"><div style="font-size:24px;">🎁 REDEEM</div>
+<select id="redeemType" class="casino-select"><option value="amazon">Amazon Gift Voucher (500 coins)</option><option value="googleplay">Google Play Voucher (500 coins)</option><option value="freediamond">Free Fire 500 Diamonds (420 coins)</option></select>
+<div id="emailField"><input type="email" id="redeemEmail" placeholder="Email" class="casino-input"></div>
+<div id="uidField" style="display:none"><input type="text" id="redeemUid" placeholder="Free Fire UID" class="casino-input"></div>
+<button id="submitRedeem" class="casino-btn">REDEEM</button><button id="closeRedeemModal" class="casino-btn">CANCEL</button><p id="redeemMsg"></p></div></div>
 <script>
 const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
-// Prevent left-right drag
 document.body.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
 document.body.addEventListener('touchstart', function(e) {}, { passive: false });
+
+const drawer = document.getElementById('drawer');
+const drawerTab = document.getElementById('drawerTab');
+drawerTab.addEventListener('click', () => {
+  drawer.classList.toggle('open');
+});
 
 let userId = null;
 let currentCoins = 0;
@@ -618,7 +635,6 @@ let spinSoundTimeout = null;
 
 const gemsList = ${JSON.stringify(GEMS)};
 
-// Audio context and sounds
 let audioCtx = null;
 let tickInterval = null;
 
@@ -936,8 +952,7 @@ async function unlock() {
     const data = await res.json();
     if (data.shortLink) {
       window.open(data.shortLink, '_blank');
-      // Wait and then check status after user returns (fallback)
-      setTimeout(() => checkUnlockStatus(), 10000);
+      // No automatic polling – unlock only via callback
     } else {
       alert("Unlock failed: " + (data.error || "Unknown error"));
     }
@@ -965,7 +980,6 @@ async function initAuth() {
   const botUsername = u.username || "lucky_gems_bot";
   window.referralLink = "https://t.me/" + botUsername + "?startapp=" + data.referralCode;
   
-  // Check for unlock confirmation from URL params
   const urlToken = urlParams.get('unlock_token');
   const urlUserId = urlParams.get('userId');
   if (urlToken && urlUserId && urlUserId === userId) {
@@ -977,11 +991,9 @@ async function initAuth() {
     const confirmData = await confirmRes.json();
     if (confirmData.success) {
       alert("Spin unlocked for 24 hours!");
-      // Remove the params from URL to avoid re-triggering on reload
       history.replaceState(null, '', window.location.pathname);
     }
   }
-  // Finally check unlock status
   await checkUnlockStatus();
 }
 
@@ -995,12 +1007,21 @@ document.getElementById("betMinus").onclick = () => {
   if (currentBet > 1) { currentBet--; document.getElementById("betValue").innerText = currentBet; }
 };
 
-// Referral modal
-document.getElementById("referBtn").onclick = () => {
+// Drawer buttons
+document.getElementById("drawerReferBtn").onclick = () => {
   playClickSound();
   document.getElementById("referLinkDisplay").innerText = window.referralLink || "Loading...";
   document.getElementById("referModal").style.display = "flex";
+  drawer.classList.remove('open');
 };
+document.getElementById("drawerRedeemBtn").onclick = () => {
+  playClickSound();
+  document.getElementById("redeemModal").style.display = "flex";
+  document.getElementById("redeemMsg").innerText = "";
+  drawer.classList.remove('open');
+};
+
+// Modal handlers
 document.getElementById("copyReferLink").onclick = () => {
   playClickSound();
   const link = window.referralLink;
@@ -1010,13 +1031,6 @@ document.getElementById("copyReferLink").onclick = () => {
 document.getElementById("closeReferModal").onclick = () => {
   playClickSound();
   document.getElementById("referModal").style.display = "none";
-};
-
-// Redeem modal
-document.getElementById("redeemBtn").onclick = () => {
-  playClickSound();
-  document.getElementById("redeemModal").style.display = "flex";
-  document.getElementById("redeemMsg").innerText = "";
 };
 document.getElementById("closeRedeemModal").onclick = () => {
   playClickSound();
