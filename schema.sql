@@ -28,6 +28,14 @@ CREATE TABLE IF NOT EXISTS redemptions (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS unlocks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL,
+  last_unlock_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  unlock_token TEXT UNIQUE,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_users_telegram ON users(telegram_id);
 CREATE INDEX IF NOT EXISTS idx_users_referral ON users(referral_code);
 CREATE INDEX IF NOT EXISTS idx_redemptions_user ON redemptions(user_id);
