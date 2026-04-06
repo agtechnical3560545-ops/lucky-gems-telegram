@@ -230,7 +230,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML (Sliding Drawer + Loading Animation) =======================
+// ======================= FRONTEND HTML (Original Sidebar + No Long Press) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -271,14 +271,12 @@ body {
   overflow: hidden;
   touch-action: pan-y;
 }
-img {
-  -webkit-user-drag: none;
-  user-drag: none;
-  pointer-events: none;
-}
-img, .spin-btn img, .action-btn img {
+/* Prevent any context menu / long press popup on all images */
+img, .spin-btn img, .action-btn img, .sidebtn {
   -webkit-touch-callout: none;
   pointer-events: auto;
+  -webkit-user-drag: none;
+  user-drag: none;
 }
 .topbar {
   display: flex;
@@ -344,69 +342,29 @@ img, .spin-btn img, .action-btn img {
   object-fit: contain;
   margin-bottom: 18px; 
 }
-/* ---------- SLIDING DRAWER (REFER & REDEEM) ---------- */
-.drawer-handle {
-  position: fixed;
-  right: 0;
+/* Original sidebar – fixed, small, always visible */
+.sidebar {
+  position: absolute;
+  right: 5px;
   top: 50%;
   transform: translateY(-50%);
-  width: 36px;
-  height: 100px;
-  background: linear-gradient(145deg, #ffb300, #fb8c00);
-  border-radius: 20px 0 0 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 100;
-  box-shadow: -3px 3px 10px rgba(0,0,0,0.4);
-  transition: 0.2s;
-}
-.drawer-handle span {
-  writing-mode: vertical-rl;
-  font-size: 16px;
-  font-weight: bold;
-  color: #1f1a0a;
-  letter-spacing: 2px;
-}
-.drawer {
-  position: fixed;
-  right: -200px;
-  top: 0;
-  width: 200px;
-  height: 100%;
-  background: rgba(0,0,0,0.85);
-  backdrop-filter: blur(12px);
-  z-index: 150;
-  transition: right 0.3s cubic-bezier(0.2, 0.9, 0.4, 1.1);
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 25px;
-  padding: 20px;
-  border-left: 2px solid gold;
-  box-shadow: -5px 0 25px rgba(0,0,0,0.6);
+  gap: 8px;
+  z-index: 4;
 }
-.drawer.open {
-  right: 0;
-}
-.drawer-btn {
-  background: linear-gradient(145deg, #9c27b0, #4a148c);
-  padding: 15px;
-  border-radius: 50px;
+.sidebtn {
+  background: linear-gradient(180deg, #9c27b0, #4a148c);
+  padding: 12px 8px;
+  border-radius: 8px;
+  color: white;
   text-align: center;
-  font-size: 18px;
-  font-weight: bold;
-  color: #ffec9f;
-  border: 1px solid #ffd700;
+  font-size: 12px;
+  border: 1px solid #ffffff50;
   cursor: pointer;
-  transition: 0.1s;
-  font-family: 'Orbitron', monospace;
+  font-family: 'Orbitron', sans-serif;
 }
-.drawer-btn:active {
-  transform: scale(0.97);
-}
-/* ---------- LOADING OVERLAY ---------- */
+/* Loading overlay */
 .loading-overlay {
   position: fixed;
   top: 0;
@@ -625,6 +583,11 @@ img, .spin-btn img, .action-btn img {
       <div class="reel" id="r3"></div>
     </div>
   </div>
+  <!-- Original sidebar with REFER and REDEEM buttons -->
+  <div class="sidebar">
+    <div class="sidebtn" id="referBtn">🔗 REFER</div>
+    <div class="sidebtn" id="redeemBtn">🎁 REDEEM</div>
+  </div>
 </div>
 <div class="controls">
   <div class="bet-bar">
@@ -643,14 +606,6 @@ img, .spin-btn img, .action-btn img {
     <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/unlock-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
   </div>
 </div>
-<!-- Sliding drawer handle and drawer -->
-<div class="drawer-handle" id="drawerHandle">
-  <span>🎁 MENU</span>
-</div>
-<div class="drawer" id="drawer">
-  <div class="drawer-btn" id="drawerReferBtn">🔗 REFER</div>
-  <div class="drawer-btn" id="drawerRedeemBtn">🎁 REDEEM</div>
-</div>
 <div id="winOverlay"><div class="win-box"><h1 class="win-title">BIG WIN!</h1><div class="win-amount" id="winLabel">+0</div><button class="collect-btn" id="collectBtn">COLLECT</button></div></div>
 <div id="referModal" class="modal"><div class="modal-content"><div style="font-size:24px;">🔗 YOUR REFERRAL LINK</div><div class="refer-code-box" id="referLinkDisplay">Loading...</div><button class="casino-btn" id="copyReferLink">COPY LINK</button><button class="casino-btn" id="closeReferModal">CLOSE</button></div></div>
 <div id="redeemModal" class="modal"><div class="modal-content"><div style="font-size:24px;">🎁 REDEEM</div>
@@ -663,45 +618,22 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
+// ---------- Prevent any long press popup on all images ----------
+document.querySelectorAll('img').forEach(img => {
+  img.addEventListener('contextmenu', (e) => e.preventDefault());
+  img.addEventListener('dragstart', (e) => e.preventDefault());
+  img.setAttribute('draggable', 'false');
+});
+document.querySelectorAll('.sidebtn, .action-btn img').forEach(el => {
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+});
+// Also prevent global context menu
+document.body.addEventListener('contextmenu', (e) => e.preventDefault());
+
 // ---------- Loading overlay control ----------
 const loadingOverlay = document.getElementById('loadingOverlay');
 function showLoading() { loadingOverlay.style.display = 'flex'; }
 function hideLoading() { loadingOverlay.style.opacity = '0'; setTimeout(() => { loadingOverlay.style.display = 'none'; }, 300); }
-
-// ---------- Drawer with swipe from right edge ----------
-const drawer = document.getElementById('drawer');
-const drawerHandle = document.getElementById('drawerHandle');
-let touchStartX = 0;
-let touchEndX = 0;
-let isDrawerOpen = false;
-
-function toggleDrawer() {
-  drawer.classList.toggle('open');
-  isDrawerOpen = drawer.classList.contains('open');
-}
-drawerHandle.addEventListener('click', toggleDrawer);
-// Swipe detection on body (from right edge)
-document.body.addEventListener('touchstart', (e) => {
-  touchStartX = e.changedTouches[0].clientX;
-}, { passive: true });
-document.body.addEventListener('touchend', (e) => {
-  touchEndX = e.changedTouches[0].clientX;
-  const delta = touchEndX - touchStartX;
-  // if swipe started near right edge (within 50px) and swipe left (delta negative) -> open drawer
-  if (touchStartX > window.innerWidth - 50 && delta < -30) {
-    if (!isDrawerOpen) toggleDrawer();
-  }
-  // if drawer open and swipe right (delta positive) -> close drawer
-  if (isDrawerOpen && delta > 30) {
-    toggleDrawer();
-  }
-});
-
-// ---------- Prevent long press on all images ----------
-document.querySelectorAll('img').forEach(img => {
-  img.addEventListener('contextmenu', (e) => e.preventDefault());
-  img.addEventListener('dragstart', (e) => e.preventDefault());
-});
 
 let userId = null;
 let currentCoins = 0;
@@ -1018,7 +950,6 @@ async function unlock() {
     const data = await res.json();
     if (data.shortLink) {
       window.open(data.shortLink, '_blank');
-      // No automatic polling – unlock will be triggered by callback URL
     } else {
       alert("Unlock failed: " + (data.error || "Unknown error"));
     }
@@ -1077,20 +1008,12 @@ document.getElementById("betMinus").onclick = () => {
   playClickSound();
   if (currentBet > 1) { currentBet--; document.getElementById("betValue").innerText = currentBet; }
 };
-// Drawer buttons
-document.getElementById("drawerReferBtn").onclick = () => {
+// Referral modal
+document.getElementById("referBtn").onclick = () => {
   playClickSound();
   document.getElementById("referLinkDisplay").innerText = window.referralLink || "Loading...";
   document.getElementById("referModal").style.display = "flex";
-  drawer.classList.remove('open');
 };
-document.getElementById("drawerRedeemBtn").onclick = () => {
-  playClickSound();
-  document.getElementById("redeemModal").style.display = "flex";
-  document.getElementById("redeemMsg").innerText = "";
-  drawer.classList.remove('open');
-};
-// Modal handlers
 document.getElementById("copyReferLink").onclick = () => {
   playClickSound();
   const link = window.referralLink;
@@ -1100,6 +1023,12 @@ document.getElementById("copyReferLink").onclick = () => {
 document.getElementById("closeReferModal").onclick = () => {
   playClickSound();
   document.getElementById("referModal").style.display = "none";
+};
+// Redeem modal
+document.getElementById("redeemBtn").onclick = () => {
+  playClickSound();
+  document.getElementById("redeemModal").style.display = "flex";
+  document.getElementById("redeemMsg").innerText = "";
 };
 document.getElementById("closeRedeemModal").onclick = () => {
   playClickSound();
