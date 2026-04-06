@@ -12,6 +12,8 @@ const GEMS = [
   "https://cdn.jsdelivr.net/gh/BestMovieSearchHubBot/IndiaFriendBot@main/public/gems/purple.png"
 ];
 
+const SHRINKME_API_KEY = "357d12f69660eea305f044d24b1297ca78cfd2ca";
+
 function getRandomGem(): string {
   return GEMS[Math.floor(Math.random() * GEMS.length)];
 }
@@ -41,6 +43,7 @@ function generateReferralCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+// ------------------------- AUTH -------------------------
 async function handleAuth(request: Request, env: Env): Promise<Response> {
   const { telegramId, referCode } = await request.json() as any;
   if (!telegramId) return Response.json({ error: "telegramId required" }, { status: 400 });
@@ -49,7 +52,6 @@ async function handleAuth(request: Request, env: Env): Promise<Response> {
   if (!user) {
     const userId = crypto.randomUUID();
     const newCode = generateReferralCode();
-    // ✅ Starting coins changed from 1030 to 10
     let coins = 10;
     let referredBy: string | null = null;
     if (referCode) {
@@ -57,7 +59,7 @@ async function handleAuth(request: Request, env: Env): Promise<Response> {
       if (referrer && referrer.telegram_id !== telegramId) {
         await env.DB.prepare("UPDATE users SET coins = coins + 10 WHERE id = ?").bind(referrer.id).run();
         await env.DB.prepare("INSERT INTO referral_earnings (referrer_id, new_user_id) VALUES (?, ?)").bind(referrer.id, userId).run();
-        coins += 10; // new user also gets +10 bonus
+        coins += 10;
         referredBy = referrer.telegram_id;
       }
     }
@@ -75,12 +77,85 @@ async function handleAuth(request: Request, env: Env): Promise<Response> {
   });
 }
 
+// ------------------------- UNLOCK SYSTEM (ShrinkMe.io) -------------------------
+async function handleUnlock(request: Request, env: Env): Promise<Response> {
+  const { userId } = await request.json() as { userId: string };
+  if (!userId) return Response.json({ error: "userId required" }, { status: 400 });
+
+  // Check if already unlocked within last 24 hours
+  const existing = await env.DB.prepare("SELECT last_unlock_at FROM unlocks WHERE user_id = ? ORDER BY last_unlock_at DESC LIMIT 1").bind(userId).first();
+  if (existing) {
+    const last = new Date(existing.last_unlock_at);
+    const now = new Date();
+    const diffHours = (now.getTime() - last.getTime()) / (1000 * 60 * 60);
+    if (diffHours < 24) {
+      return Response.json({ error: "Already unlocked within 24 hours", locked: false }, { status: 400 });
+    }
+  }
+
+  // Generate unique token
+  const token = crypto.randomUUID();
+  const gameBaseUrl = env.WEBAPP_URL;
+  const callbackUrl = `${gameBaseUrl}?unlock_token=${token}&userId=${userId}`;
+  const longUrl = encodeURIComponent(callbackUrl);
+  const shrinkApiUrl = `https://shrinkme.io/api?api=${SHRINKME_API_KEY}&url=${longUrl}&format=text`;
+  try {
+    const shrinkRes = await fetch(shrinkApiUrl);
+    const shortLink = await shrinkRes.text();
+    if (!shortLink || shortLink.includes("error")) {
+      throw new Error("ShrinkMe API failed");
+    }
+    // Store unlock record
+    await env.DB.prepare("INSERT INTO unlocks (user_id, unlock_token, last_unlock_at) VALUES (?, ?, ?)")
+      .bind(userId, token, new Date().toISOString()).run();
+    return Response.json({ success: true, shortLink, token });
+  } catch (e) {
+    console.error(e);
+    return Response.json({ error: "Failed to generate unlock link" }, { status: 500 });
+  }
+}
+
+async function handleConfirmUnlock(request: Request, env: Env): Promise<Response> {
+  const { userId, token } = await request.json() as { userId: string; token: string };
+  if (!userId || !token) return Response.json({ error: "Missing params" }, { status: 400 });
+  const record = await env.DB.prepare("SELECT * FROM unlocks WHERE user_id = ? AND unlock_token = ?").bind(userId, token).first();
+  if (!record) return Response.json({ error: "Invalid or expired token" }, { status: 400 });
+  // Update last_unlock_at to now
+  await env.DB.prepare("UPDATE unlocks SET last_unlock_at = CURRENT_TIMESTAMP WHERE user_id = ? AND unlock_token = ?").bind(userId, token).run();
+  return Response.json({ success: true });
+}
+
+async function handleUnlockStatus(request: Request, env: Env): Promise<Response> {
+  const { userId } = await request.json() as { userId: string };
+  if (!userId) return Response.json({ error: "userId required" }, { status: 400 });
+  const record = await env.DB.prepare("SELECT last_unlock_at FROM unlocks WHERE user_id = ? ORDER BY last_unlock_at DESC LIMIT 1").bind(userId).first();
+  if (!record) return Response.json({ unlocked: false });
+  const last = new Date(record.last_unlock_at);
+  const now = new Date();
+  const diffHours = (now.getTime() - last.getTime()) / (1000 * 60 * 60);
+  return Response.json({ unlocked: diffHours < 24 });
+}
+
+// ------------------------- SPIN & REDEEM -------------------------
 async function handleSpin(request: Request, env: Env): Promise<Response> {
   const { userId, bet } = await request.json() as { userId: string; bet: number };
   if (!bet || bet < 1 || bet > 10) return Response.json({ error: "Bet must be 1-10" }, { status: 400 });
   const user = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(userId).first();
   if (!user) return Response.json({ error: "User not found" }, { status: 404 });
   if (user.coins < bet) return Response.json({ error: "Insufficient coins" }, { status: 400 });
+
+  // Check unlock status
+  const unlockRecord = await env.DB.prepare("SELECT last_unlock_at FROM unlocks WHERE user_id = ? ORDER BY last_unlock_at DESC LIMIT 1").bind(userId).first();
+  let isUnlocked = false;
+  if (unlockRecord) {
+    const last = new Date(unlockRecord.last_unlock_at);
+    const now = new Date();
+    const diffHours = (now.getTime() - last.getTime()) / (1000 * 60 * 60);
+    isUnlocked = diffHours < 24;
+  }
+  if (!isUnlocked) {
+    return Response.json({ error: "Spin locked. Please unlock first." }, { status: 403 });
+  }
 
   let newCoins = user.coins - bet;
   await env.DB.prepare("UPDATE users SET coins = ?, total_spins = total_spins + 1 WHERE id = ?").bind(newCoins, userId).run();
@@ -120,6 +195,7 @@ async function handleRedeem(request: Request, env: Env): Promise<Response> {
   return Response.json({ success: true, newCoins });
 }
 
+// ------------------------- TELEGRAM WEBHOOK -------------------------
 async function handleTelegramWebhook(request: Request, env: Env): Promise<Response> {
   const update = await request.json() as any;
   const message = update.message;
@@ -159,7 +235,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML (all fixes applied) =======================
+// ======================= FRONTEND HTML WITH UNLOCK BUTTON =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -175,7 +251,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  touch-action: pan-y; /* allow vertical only, prevent horizontal scroll */
+  touch-action: pan-y;
 }
 html, body {
   overscroll-behavior: none;
@@ -309,7 +385,8 @@ img {
   width: 100%;
   transform: scale(1.5);
 }
-.spin-btn {
+/* Common button style for both spin and unlock */
+.action-btn {
   position: absolute;
   right: 15px;
   bottom: -25px;
@@ -317,7 +394,7 @@ img {
   max-width: 180px;
   z-index: 20;
 }
-.spin-btn img {
+.action-btn img {
   width: 100%;
   cursor: pointer;
   pointer-events: auto;
@@ -484,8 +561,13 @@ img {
       <button id="betPlus">+</button>
     </div>
   </div>
-  <div class="spin-btn" id="spinBtn">
+  <!-- Spin button (initially hidden) -->
+  <div class="action-btn" id="spinBtn" style="display: none;">
     <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false">
+  </div>
+  <!-- Unlock button (initially visible) -->
+  <div class="action-btn" id="unlockBtn">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/unlock-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
   </div>
 </div>
 <div id="winOverlay">
@@ -523,13 +605,9 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
-// 🛑 Prevent left-right drag and any page movement
-document.body.addEventListener('touchmove', function(e) {
-  e.preventDefault();
-}, { passive: false });
-document.body.addEventListener('touchstart', function(e) {
-  // Allow only vertical scrolling? None actually.
-}, { passive: false });
+// Prevent left-right drag
+document.body.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
+document.body.addEventListener('touchstart', function(e) {}, { passive: false });
 
 let userId = null;
 let currentCoins = 0;
@@ -540,7 +618,7 @@ let spinSoundTimeout = null;
 
 const gemsList = ${JSON.stringify(GEMS)};
 
-// ---------- SIMPLE SOUNDS (No noise, only mechanical ticks with 250ms delay) ----------
+// Audio context and sounds (same as before)
 let audioCtx = null;
 let tickInterval = null;
 
@@ -553,7 +631,6 @@ function initAudio() {
   }
 }
 
-// Wood click sound for buttons (short)
 function playClickSound() {
   try {
     initAudio();
@@ -572,14 +649,13 @@ function playClickSound() {
   } catch(e) { console.log("Click sound error", e); }
 }
 
-// Mechanical ticks (no noise) – starts immediately and continues for 2.5 seconds
 function startSpinTicks() {
   try {
     initAudio();
     if (!audioCtx) return;
     stopSpinTicks();
     let tickCount = 0;
-    const maxTicks = 25; // about 10 ticks per second for 2.5 sec
+    const maxTicks = 25;
     tickInterval = setInterval(() => {
       if (tickCount >= maxTicks) {
         clearInterval(tickInterval);
@@ -592,13 +668,13 @@ function startSpinTicks() {
       osc.connect(gain);
       gain.connect(audioCtx.destination);
       osc.type = 'sine';
-      osc.frequency.value = 1200; // high beep
+      osc.frequency.value = 1200;
       gain.gain.value = 0.12;
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
       osc.start();
       osc.stop(now + 0.05);
       tickCount++;
-    }, 100); // every 100ms
+    }, 100);
   } catch(e) { console.log("Tick sound error", e); }
 }
 
@@ -679,9 +755,15 @@ function updateCoins() {
 }
 
 function enableSpin(en) {
-  const btn = document.getElementById("spinBtn");
-  btn.style.pointerEvents = en ? "auto" : "none";
-  btn.style.opacity = en ? "1" : "0.6";
+  const spinBtn = document.getElementById("spinBtn");
+  const unlockBtn = document.getElementById("unlockBtn");
+  if (en) {
+    spinBtn.style.display = "block";
+    unlockBtn.style.display = "none";
+  } else {
+    spinBtn.style.display = "none";
+    unlockBtn.style.display = "block";
+  }
 }
 
 function animateReel(id, delay, finalImages) {
@@ -714,17 +796,16 @@ function animateReel(id, delay, finalImages) {
 async function spin() {
   if (isSpinning) return;
   
-  // Delay the start of ticks by 250ms (changed from 200 to 250)
-  spinSoundTimeout = setTimeout(() => {
-    startSpinTicks();
-  }, 250);
-  
+  spinSoundTimeout = setTimeout(() => { startSpinTicks(); }, 250);
   isSpinning = true;
-  enableSpin(false);
+  // disable spin button visually (it's already hidden but we keep pointer events)
+  const spinImg = document.querySelector("#spinBtn img");
+  if (spinImg) spinImg.style.pointerEvents = "none";
+  
   if (currentCoins < currentBet) {
     alert("Not enough coins!");
     isSpinning = false;
-    enableSpin(true);
+    if (spinImg) spinImg.style.pointerEvents = "auto";
     if (spinSoundTimeout) clearTimeout(spinSoundTimeout);
     return;
   }
@@ -752,7 +833,6 @@ async function spin() {
       animateReel('r2', 200, finalReels[1]),
       animateReel('r3', 400, finalReels[2])
     ]);
-    // Stop ticks after animation
     if (spinSoundTimeout) clearTimeout(spinSoundTimeout);
     stopSpinTicks();
     highlightWins(data.matrix);
@@ -761,19 +841,19 @@ async function spin() {
       if (data.win >= 15) showBigWin(data.win);
       else smoothCoins(currentCoins + data.win, () => {
         isSpinning = false;
-        enableSpin(true);
+        if (spinImg) spinImg.style.pointerEvents = "auto";
         document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
       });
     } else {
       isSpinning = false;
-      enableSpin(true);
+      if (spinImg) spinImg.style.pointerEvents = "auto";
       document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
     }
   } catch (e) {
     alert("Spin error: " + e.message);
     console.error(e);
     isSpinning = false;
-    enableSpin(true);
+    if (spinImg) spinImg.style.pointerEvents = "auto";
     if (spinSoundTimeout) clearTimeout(spinSoundTimeout);
     stopSpinTicks();
   }
@@ -829,10 +909,45 @@ function showBigWin(amt) {
 function closeWin() {
   document.getElementById("winOverlay").style.display = "none";
   smoothCoins(currentCoins + bigWinAmount, () => {
-    isSpinning = false;
-    enableSpin(true);
+    // nothing special
   });
   bigWinAmount = 0;
+}
+
+async function checkUnlockStatus() {
+  try {
+    const res = await fetch('/api/unlock/status', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
+    });
+    const data = await res.json();
+    if (data.unlocked) {
+      enableSpin(true);
+    } else {
+      enableSpin(false);
+    }
+  } catch(e) { console.log(e); }
+}
+
+async function unlock() {
+  playClickSound();
+  try {
+    const res = await fetch('/api/unlock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId })
+    });
+    const data = await res.json();
+    if (data.shortLink) {
+      window.open(data.shortLink, '_blank');
+      // Wait for user to come back and confirm unlock via URL params
+    } else {
+      alert("Unlock failed: " + (data.error || "Unknown error"));
+    }
+  } catch(e) {
+    alert("Network error");
+  }
 }
 
 async function initAuth() {
@@ -853,9 +968,28 @@ async function initAuth() {
   document.getElementById("username").innerText = u.first_name || "Player";
   const botUsername = u.username || "lucky_gems_bot";
   window.referralLink = "https://t.me/" + botUsername + "?startapp=" + data.referralCode;
+  
+  // Check for unlock confirmation from URL params
+  const urlToken = urlParams.get('unlock_token');
+  const urlUserId = urlParams.get('userId');
+  if (urlToken && urlUserId && urlUserId === userId) {
+    const confirmRes = await fetch('/api/confirm-unlock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, token: urlToken })
+    });
+    const confirmData = await confirmRes.json();
+    if (confirmData.success) {
+      alert("Spin unlocked for 24 hours!");
+      // Remove the params from URL to avoid re-triggering on reload
+      history.replaceState(null, '', window.location.pathname);
+    }
+  }
+  // Finally check unlock status
+  await checkUnlockStatus();
 }
 
-// Bet controls with click sound
+// Bet controls
 document.getElementById("betPlus").onclick = () => {
   playClickSound();
   if (currentBet < 10) { currentBet++; document.getElementById("betValue").innerText = currentBet; }
@@ -865,7 +999,7 @@ document.getElementById("betMinus").onclick = () => {
   if (currentBet > 1) { currentBet--; document.getElementById("betValue").innerText = currentBet; }
 };
 
-// Referral modal with click sound
+// Referral modal
 document.getElementById("referBtn").onclick = () => {
   playClickSound();
   document.getElementById("referLinkDisplay").innerText = window.referralLink || "Loading...";
@@ -882,7 +1016,7 @@ document.getElementById("closeReferModal").onclick = () => {
   document.getElementById("referModal").style.display = "none";
 };
 
-// Redeem modal with click sound
+// Redeem modal
 document.getElementById("redeemBtn").onclick = () => {
   playClickSound();
   document.getElementById("redeemModal").style.display = "flex";
@@ -927,7 +1061,9 @@ document.getElementById("submitRedeem").onclick = async () => {
 };
 
 document.getElementById("spinBtn").addEventListener("click", spin);
+document.getElementById("unlockBtn").addEventListener("click", unlock);
 document.getElementById("collectBtn").addEventListener("click", closeWin);
+
 initAuth();
 </script>
 </body>
@@ -945,6 +1081,9 @@ export default {
     if (path === "/api/auth" && request.method === "POST") return handleAuth(request, env);
     if (path === "/api/spin" && request.method === "POST") return handleSpin(request, env);
     if (path === "/api/redeem" && request.method === "POST") return handleRedeem(request, env);
+    if (path === "/api/unlock" && request.method === "POST") return handleUnlock(request, env);
+    if (path === "/api/confirm-unlock" && request.method === "POST") return handleConfirmUnlock(request, env);
+    if (path === "/api/unlock/status" && request.method === "POST") return handleUnlockStatus(request, env);
     if (path === "/webhook" && request.method === "POST") return handleTelegramWebhook(request, env);
 
     return new Response("Not Found", { status: 404 });
