@@ -565,9 +565,9 @@ img {
   <div class="action-btn" id="spinBtn" style="display: none;">
     <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false">
   </div>
-  <!-- Unlock button (initially visible) -->
+  <!-- Unlock button (initially visible) – using same spin button image, you can replace with unlock-btn.png if needed -->
   <div class="action-btn" id="unlockBtn">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/unlock-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
   </div>
 </div>
 <div id="winOverlay">
@@ -618,7 +618,7 @@ let spinSoundTimeout = null;
 
 const gemsList = ${JSON.stringify(GEMS)};
 
-// Audio context and sounds (same as before)
+// Audio context and sounds
 let audioCtx = null;
 let tickInterval = null;
 
@@ -795,13 +795,10 @@ function animateReel(id, delay, finalImages) {
 
 async function spin() {
   if (isSpinning) return;
-  
   spinSoundTimeout = setTimeout(() => { startSpinTicks(); }, 250);
   isSpinning = true;
-  // disable spin button visually (it's already hidden but we keep pointer events)
   const spinImg = document.querySelector("#spinBtn img");
   if (spinImg) spinImg.style.pointerEvents = "none";
-  
   if (currentCoins < currentBet) {
     alert("Not enough coins!");
     isSpinning = false;
@@ -908,9 +905,7 @@ function showBigWin(amt) {
 
 function closeWin() {
   document.getElementById("winOverlay").style.display = "none";
-  smoothCoins(currentCoins + bigWinAmount, () => {
-    // nothing special
-  });
+  smoothCoins(currentCoins + bigWinAmount, () => {});
   bigWinAmount = 0;
 }
 
@@ -941,7 +936,8 @@ async function unlock() {
     const data = await res.json();
     if (data.shortLink) {
       window.open(data.shortLink, '_blank');
-      // Wait for user to come back and confirm unlock via URL params
+      // Wait and then check status after user returns (fallback)
+      setTimeout(() => checkUnlockStatus(), 10000);
     } else {
       alert("Unlock failed: " + (data.error || "Unknown error"));
     }
