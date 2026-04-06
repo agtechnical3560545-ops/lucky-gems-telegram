@@ -43,6 +43,7 @@ function generateReferralCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+// ------------------------- AUTH -------------------------
 async function handleAuth(request: Request, env: Env): Promise<Response> {
   const { telegramId, referCode } = await request.json() as any;
   if (!telegramId) return Response.json({ error: "telegramId required" }, { status: 400 });
@@ -103,7 +104,7 @@ async function handleUnlock(request: Request, env: Env): Promise<Response> {
       throw new Error("ShrinkMe API failed");
     }
     await env.DB.prepare("INSERT INTO unlocks (user_id, unlock_token, last_unlock_at) VALUES (?, ?, ?)")
-      .bind(userId, token, new Date(0).toISOString()).run(); // pending unlock
+      .bind(userId, token, new Date(0).toISOString()).run(); // pending
     return Response.json({ success: true, shortLink, token });
   } catch (e) {
     console.error(e);
@@ -229,7 +230,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML (Sliding Drawer + Non-bypassable Unlock) =======================
+// ======================= FRONTEND HTML (Sliding Drawer + Loading Animation) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -343,29 +344,30 @@ img, .spin-btn img, .action-btn img {
   object-fit: contain;
   margin-bottom: 18px; 
 }
-/* Sliding drawer */
-.drawer-tab {
+/* ---------- SLIDING DRAWER (REFER & REDEEM) ---------- */
+.drawer-handle {
   position: fixed;
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-  width: 30px;
-  height: 80px;
-  background: linear-gradient(135deg, #ffb300, #fb8c00);
+  width: 36px;
+  height: 100px;
+  background: linear-gradient(145deg, #ffb300, #fb8c00);
   border-radius: 20px 0 0 20px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 100;
-  box-shadow: -2px 2px 10px rgba(0,0,0,0.3);
+  box-shadow: -3px 3px 10px rgba(0,0,0,0.4);
   transition: 0.2s;
 }
-.drawer-tab span {
+.drawer-handle span {
   writing-mode: vertical-rl;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: bold;
   color: #1f1a0a;
+  letter-spacing: 2px;
 }
 .drawer {
   position: fixed;
@@ -375,32 +377,69 @@ img, .spin-btn img, .action-btn img {
   height: 100%;
   background: rgba(0,0,0,0.85);
   backdrop-filter: blur(12px);
-  z-index: 200;
-  transition: right 0.3s ease;
+  z-index: 150;
+  transition: right 0.3s cubic-bezier(0.2, 0.9, 0.4, 1.1);
   display: flex;
   flex-direction: column;
-  padding: 80px 20px 20px;
+  justify-content: center;
   gap: 25px;
+  padding: 20px;
   border-left: 2px solid gold;
-  box-shadow: -5px 0 20px rgba(0,0,0,0.5);
+  box-shadow: -5px 0 25px rgba(0,0,0,0.6);
 }
 .drawer.open {
   right: 0;
 }
 .drawer-btn {
-  background: linear-gradient(180deg, #9c27b0, #4a148c);
-  padding: 15px 10px;
-  border-radius: 40px;
-  color: white;
+  background: linear-gradient(145deg, #9c27b0, #4a148c);
+  padding: 15px;
+  border-radius: 50px;
   text-align: center;
   font-size: 18px;
   font-weight: bold;
+  color: #ffec9f;
   border: 1px solid #ffd700;
   cursor: pointer;
   transition: 0.1s;
+  font-family: 'Orbitron', monospace;
 }
 .drawer-btn:active {
   transform: scale(0.97);
+}
+/* ---------- LOADING OVERLAY ---------- */
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.85);
+  backdrop-filter: blur(8px);
+  z-index: 10000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  gap: 20px;
+  transition: opacity 0.3s ease;
+}
+.loading-spinner {
+  width: 80px;
+  height: 80px;
+  border: 6px solid rgba(255,215,0,0.2);
+  border-top: 6px solid #ffd700;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+.loading-text {
+  font-size: 18px;
+  letter-spacing: 2px;
+  color: #ffd966;
+  font-weight: bold;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 .controls {
   position: fixed;
@@ -569,6 +608,10 @@ img, .spin-btn img, .action-btn img {
 </style>
 </head>
 <body oncontextmenu="return false" ontouchstart="return true">
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">LOADING GEMS...</div>
+</div>
 <div class="topbar">
   <div>👤 <span id="username">Player</span></div>
   <div class="coins">💰 <span id="coins">0.00</span></div>
@@ -600,7 +643,10 @@ img, .spin-btn img, .action-btn img {
     <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/unlock-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
   </div>
 </div>
-<div class="drawer-tab" id="drawerTab"><span>🎁 MENU</span></div>
+<!-- Sliding drawer handle and drawer -->
+<div class="drawer-handle" id="drawerHandle">
+  <span>🎁 MENU</span>
+</div>
 <div class="drawer" id="drawer">
   <div class="drawer-btn" id="drawerReferBtn">🔗 REFER</div>
   <div class="drawer-btn" id="drawerRedeemBtn">🎁 REDEEM</div>
@@ -617,13 +663,44 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
-document.body.addEventListener('touchmove', function(e) { e.preventDefault(); }, { passive: false });
-document.body.addEventListener('touchstart', function(e) {}, { passive: false });
+// ---------- Loading overlay control ----------
+const loadingOverlay = document.getElementById('loadingOverlay');
+function showLoading() { loadingOverlay.style.display = 'flex'; }
+function hideLoading() { loadingOverlay.style.opacity = '0'; setTimeout(() => { loadingOverlay.style.display = 'none'; }, 300); }
 
+// ---------- Drawer with swipe from right edge ----------
 const drawer = document.getElementById('drawer');
-const drawerTab = document.getElementById('drawerTab');
-drawerTab.addEventListener('click', () => {
+const drawerHandle = document.getElementById('drawerHandle');
+let touchStartX = 0;
+let touchEndX = 0;
+let isDrawerOpen = false;
+
+function toggleDrawer() {
   drawer.classList.toggle('open');
+  isDrawerOpen = drawer.classList.contains('open');
+}
+drawerHandle.addEventListener('click', toggleDrawer);
+// Swipe detection on body (from right edge)
+document.body.addEventListener('touchstart', (e) => {
+  touchStartX = e.changedTouches[0].clientX;
+}, { passive: true });
+document.body.addEventListener('touchend', (e) => {
+  touchEndX = e.changedTouches[0].clientX;
+  const delta = touchEndX - touchStartX;
+  // if swipe started near right edge (within 50px) and swipe left (delta negative) -> open drawer
+  if (touchStartX > window.innerWidth - 50 && delta < -30) {
+    if (!isDrawerOpen) toggleDrawer();
+  }
+  // if drawer open and swipe right (delta positive) -> close drawer
+  if (isDrawerOpen && delta > 30) {
+    toggleDrawer();
+  }
+});
+
+// ---------- Prevent long press on all images ----------
+document.querySelectorAll('img').forEach(img => {
+  img.addEventListener('contextmenu', (e) => e.preventDefault());
+  img.addEventListener('dragstart', (e) => e.preventDefault());
 });
 
 let userId = null;
@@ -646,7 +723,6 @@ function initAudio() {
     audioCtx.resume();
   }
 }
-
 function playClickSound() {
   try {
     initAudio();
@@ -664,7 +740,6 @@ function playClickSound() {
     osc.stop(now + 0.06);
   } catch(e) { console.log("Click sound error", e); }
 }
-
 function startSpinTicks() {
   try {
     initAudio();
@@ -693,14 +768,12 @@ function startSpinTicks() {
     }, 100);
   } catch(e) { console.log("Tick sound error", e); }
 }
-
 function stopSpinTicks() {
   if (tickInterval) {
     clearInterval(tickInterval);
     tickInterval = null;
   }
 }
-
 function playWinSound() {
   try {
     initAudio();
@@ -734,7 +807,6 @@ function playWinSound() {
     }, 200);
   } catch(e) { console.log("Win sound error", e); }
 }
-
 function createReel(id, arr) {
   const reel = document.getElementById(id);
   reel.innerHTML = "";
@@ -745,7 +817,6 @@ function createReel(id, arr) {
     reel.appendChild(img);
   });
 }
-
 function randomReel() {
   let count = {};
   gemsList.forEach(g => count[g] = 0);
@@ -760,16 +831,13 @@ function randomReel() {
   arr.sort(() => Math.random() - 0.5);
   return arr;
 }
-
 function initReels() {
   for (let i = 1; i <= 3; i++) createReel('r' + i, randomReel());
 }
 initReels();
-
 function updateCoins() {
   document.getElementById("coins").innerText = currentCoins.toFixed(2);
 }
-
 function enableSpin(en) {
   const spinBtn = document.getElementById("spinBtn");
   const unlockBtn = document.getElementById("unlockBtn");
@@ -781,7 +849,6 @@ function enableSpin(en) {
     unlockBtn.style.display = "block";
   }
 }
-
 function animateReel(id, delay, finalImages) {
   return new Promise((resolve) => {
     const reel = document.getElementById(id);
@@ -808,9 +875,9 @@ function animateReel(id, delay, finalImages) {
     setTimeout(() => requestAnimationFrame(step), delay);
   });
 }
-
 async function spin() {
   if (isSpinning) return;
+  showLoading();
   spinSoundTimeout = setTimeout(() => { startSpinTicks(); }, 250);
   isSpinning = true;
   const spinImg = document.querySelector("#spinBtn img");
@@ -820,6 +887,7 @@ async function spin() {
     isSpinning = false;
     if (spinImg) spinImg.style.pointerEvents = "auto";
     if (spinSoundTimeout) clearTimeout(spinSoundTimeout);
+    hideLoading();
     return;
   }
   currentCoins -= currentBet;
@@ -856,11 +924,13 @@ async function spin() {
         isSpinning = false;
         if (spinImg) spinImg.style.pointerEvents = "auto";
         document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
+        hideLoading();
       });
     } else {
       isSpinning = false;
       if (spinImg) spinImg.style.pointerEvents = "auto";
       document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
+      hideLoading();
     }
   } catch (e) {
     alert("Spin error: " + e.message);
@@ -869,9 +939,9 @@ async function spin() {
     if (spinImg) spinImg.style.pointerEvents = "auto";
     if (spinSoundTimeout) clearTimeout(spinSoundTimeout);
     stopSpinTicks();
+    hideLoading();
   }
 }
-
 function highlightWins(mat) {
   document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
   for (let row = 0; row < 3; row++) {
@@ -895,7 +965,6 @@ function highlightWins(mat) {
     }
   }
 }
-
 function smoothCoins(target, cb) {
   let start = currentCoins;
   let step = Math.max(0.05, (target - start) / 20);
@@ -912,19 +981,16 @@ function smoothCoins(target, cb) {
     }
   }, 30);
 }
-
 function showBigWin(amt) {
   document.getElementById("winLabel").innerText = "+" + amt.toFixed(2) + " COINS";
   document.getElementById("winOverlay").style.display = "flex";
   bigWinAmount = amt;
 }
-
 function closeWin() {
   document.getElementById("winOverlay").style.display = "none";
   smoothCoins(currentCoins + bigWinAmount, () => {});
   bigWinAmount = 0;
 }
-
 async function checkUnlockStatus() {
   try {
     const res = await fetch('/api/unlock/status', {
@@ -940,9 +1006,9 @@ async function checkUnlockStatus() {
     }
   } catch(e) { console.log(e); }
 }
-
 async function unlock() {
   playClickSound();
+  showLoading();
   try {
     const res = await fetch('/api/unlock', {
       method: 'POST',
@@ -952,51 +1018,56 @@ async function unlock() {
     const data = await res.json();
     if (data.shortLink) {
       window.open(data.shortLink, '_blank');
-      // No automatic polling – unlock only via callback
+      // No automatic polling – unlock will be triggered by callback URL
     } else {
       alert("Unlock failed: " + (data.error || "Unknown error"));
     }
   } catch(e) {
     alert("Network error");
   }
+  hideLoading();
 }
-
 async function initAuth() {
+  showLoading();
   const u = tg.initDataUnsafe?.user;
-  if (!u) { alert("Open from Telegram"); return; }
+  if (!u) { alert("Open from Telegram"); hideLoading(); return; }
   const telegramId = u.id.toString();
   const urlParams = new URLSearchParams(location.search);
   const ref = urlParams.get('startapp');
-  const res = await fetch('/api/auth', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ telegramId, referCode: ref })
-  });
-  const data = await res.json();
-  userId = data.userId;
-  currentCoins = data.coins;
-  updateCoins();
-  document.getElementById("username").innerText = u.first_name || "Player";
-  const botUsername = u.username || "lucky_gems_bot";
-  window.referralLink = "https://t.me/" + botUsername + "?startapp=" + data.referralCode;
-  
-  const urlToken = urlParams.get('unlock_token');
-  const urlUserId = urlParams.get('userId');
-  if (urlToken && urlUserId && urlUserId === userId) {
-    const confirmRes = await fetch('/api/confirm-unlock', {
+  try {
+    const res = await fetch('/api/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, token: urlToken })
+      body: JSON.stringify({ telegramId, referCode: ref })
     });
-    const confirmData = await confirmRes.json();
-    if (confirmData.success) {
-      alert("Spin unlocked for 24 hours!");
-      history.replaceState(null, '', window.location.pathname);
+    const data = await res.json();
+    userId = data.userId;
+    currentCoins = data.coins;
+    updateCoins();
+    document.getElementById("username").innerText = u.first_name || "Player";
+    const botUsername = u.username || "lucky_gems_bot";
+    window.referralLink = "https://t.me/" + botUsername + "?startapp=" + data.referralCode;
+    const urlToken = urlParams.get('unlock_token');
+    const urlUserId = urlParams.get('userId');
+    if (urlToken && urlUserId && urlUserId === userId) {
+      const confirmRes = await fetch('/api/confirm-unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, token: urlToken })
+      });
+      const confirmData = await confirmRes.json();
+      if (confirmData.success) {
+        alert("Spin unlocked for 24 hours!");
+        history.replaceState(null, '', window.location.pathname);
+      }
     }
+    await checkUnlockStatus();
+  } catch(e) {
+    console.error(e);
+  } finally {
+    hideLoading();
   }
-  await checkUnlockStatus();
 }
-
 // Bet controls
 document.getElementById("betPlus").onclick = () => {
   playClickSound();
@@ -1006,7 +1077,6 @@ document.getElementById("betMinus").onclick = () => {
   playClickSound();
   if (currentBet > 1) { currentBet--; document.getElementById("betValue").innerText = currentBet; }
 };
-
 // Drawer buttons
 document.getElementById("drawerReferBtn").onclick = () => {
   playClickSound();
@@ -1020,7 +1090,6 @@ document.getElementById("drawerRedeemBtn").onclick = () => {
   document.getElementById("redeemMsg").innerText = "";
   drawer.classList.remove('open');
 };
-
 // Modal handlers
 document.getElementById("copyReferLink").onclick = () => {
   playClickSound();
@@ -1047,33 +1116,35 @@ document.getElementById("redeemType").onchange = function() {
 };
 document.getElementById("submitRedeem").onclick = async () => {
   playClickSound();
+  showLoading();
   const type = document.getElementById("redeemType").value;
   let email = null, uid = null;
   if (type === "freediamond") {
     uid = document.getElementById("redeemUid").value;
-    if (!uid) { alert("Enter UID"); return; }
+    if (!uid) { alert("Enter UID"); hideLoading(); return; }
   } else {
     email = document.getElementById("redeemEmail").value;
-    if (!email) { alert("Enter email"); return; }
+    if (!email) { alert("Enter email"); hideLoading(); return; }
   }
-  const res = await fetch('/api/redeem', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, type, email, uid })
-  });
-  const data = await res.json();
-  if (res.ok) {
-    currentCoins = data.newCoins;
-    updateCoins();
-    alert("Redemption request submitted!");
-    document.getElementById("redeemModal").style.display = "none";
-  } else alert(data.error);
+  try {
+    const res = await fetch('/api/redeem', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, type, email, uid })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      currentCoins = data.newCoins;
+      updateCoins();
+      alert("Redemption request submitted!");
+      document.getElementById("redeemModal").style.display = "none";
+    } else alert(data.error);
+  } catch(e) { alert("Network error"); }
+  hideLoading();
 };
-
 document.getElementById("spinBtn").addEventListener("click", spin);
 document.getElementById("unlockBtn").addEventListener("click", unlock);
 document.getElementById("collectBtn").addEventListener("click", closeWin);
-
 initAuth();
 </script>
 </body>
