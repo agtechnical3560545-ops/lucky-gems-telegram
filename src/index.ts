@@ -597,7 +597,7 @@ img, .spin-btn img, .action-btn img {
     <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false">
   </div>
   <div class="action-btn" id="unlockBtn">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/unlock-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
   </div>
 </div>
 <div class="drawer-tab" id="drawerTab"><span>🎁 MENU</span></div>
