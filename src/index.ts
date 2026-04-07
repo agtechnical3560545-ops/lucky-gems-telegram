@@ -43,7 +43,6 @@ function generateReferralCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-// ------------------------- AUTH -------------------------
 async function handleAuth(request: Request, env: Env): Promise<Response> {
   const { telegramId, referCode } = await request.json() as any;
   if (!telegramId) return Response.json({ error: "telegramId required" }, { status: 400 });
@@ -77,7 +76,6 @@ async function handleAuth(request: Request, env: Env): Promise<Response> {
   });
 }
 
-// ------------------------- UNLOCK SYSTEM (ShrinkMe.io) -------------------------
 async function handleUnlock(request: Request, env: Env): Promise<Response> {
   const { userId } = await request.json() as { userId: string };
   if (!userId) return Response.json({ error: "userId required" }, { status: 400 });
@@ -104,7 +102,7 @@ async function handleUnlock(request: Request, env: Env): Promise<Response> {
       throw new Error("ShrinkMe API failed");
     }
     await env.DB.prepare("INSERT INTO unlocks (user_id, unlock_token, last_unlock_at) VALUES (?, ?, ?)")
-      .bind(userId, token, new Date(0).toISOString()).run(); // pending
+      .bind(userId, token, new Date(0).toISOString()).run();
     return Response.json({ success: true, shortLink, token });
   } catch (e) {
     console.error(e);
@@ -132,7 +130,6 @@ async function handleUnlockStatus(request: Request, env: Env): Promise<Response>
   return Response.json({ unlocked: diffHours < 24 });
 }
 
-// ------------------------- SPIN & REDEEM -------------------------
 async function handleSpin(request: Request, env: Env): Promise<Response> {
   const { userId, bet } = await request.json() as { userId: string; bet: number };
   if (!bet || bet < 1 || bet > 10) return Response.json({ error: "Bet must be 1-10" }, { status: 400 });
@@ -190,7 +187,6 @@ async function handleRedeem(request: Request, env: Env): Promise<Response> {
   return Response.json({ success: true, newCoins });
 }
 
-// ------------------------- TELEGRAM WEBHOOK -------------------------
 async function handleTelegramWebhook(request: Request, env: Env): Promise<Response> {
   const update = await request.json() as any;
   const message = update.message;
@@ -230,7 +226,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML (Swipe to Reveal Referral Panel) =======================
+// ======================= FRONTEND HTML (Fixed template literal) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -271,7 +267,6 @@ body {
   overflow: hidden;
   touch-action: pan-y;
 }
-/* Force disable long press on all images and interactive elements */
 img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
   -webkit-touch-callout: none !important;
   pointer-events: auto;
@@ -296,7 +291,6 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
   border-radius: 40px;
   border: 1px solid #ffd700;
 }
-/* Swipe Container */
 .swipe-container {
   width: 100%;
   height: calc(100% - 180px);
@@ -382,7 +376,6 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
   cursor: pointer;
   font-family: 'Orbitron', sans-serif;
 }
-/* Referral Panel (hidden initially, appears when swiped) */
 .refer-panel {
   position: absolute;
   top: 0;
@@ -458,7 +451,6 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
   color: #ffd966;
   margin-top: 20px;
 }
-/* Loading overlay */
 .loading-overlay {
   position: fixed;
   top: 0;
@@ -745,7 +737,6 @@ function closePanel() {
   panel.classList.remove('visible');
   machineWrapper.style.transform = 'translateX(0)';
 }
-// Swipe detection on the swipe container
 const swipeContainer = document.getElementById('swipeContainer');
 swipeContainer.addEventListener('touchstart', (e) => {
   if (isSpinning) return;
@@ -759,8 +750,7 @@ swipeContainer.addEventListener('touchmove', (e) => {
   let delta = touchMoveX - touchStartX;
   let newTransform = startTransform + (delta / window.innerWidth) * 100;
   newTransform = Math.min(0, Math.max(-100, newTransform));
-  machineWrapper.style.transform = `translateX(${newTransform}%)`;
-  // Show panel opacity based on how far swiped
+  machineWrapper.style.transform = 'translateX(' + newTransform + '%)';
   let panelOpacity = Math.abs(newTransform) / 100;
   if (panelOpacity > 0.1) {
     panel.classList.add('visible');
@@ -780,12 +770,11 @@ swipeContainer.addEventListener('touchend', (e) => {
   }
   panel.style.opacity = '';
 });
-// Close panel button
 document.getElementById('closePanelBtn').addEventListener('click', () => {
   closePanel();
 });
 
-// ---------- Global long press prevention (capture phase) ----------
+// ---------- Global long press prevention ----------
 document.addEventListener('contextmenu', function(e) {
   e.preventDefault();
   e.stopPropagation();
@@ -817,7 +806,7 @@ const observer = new MutationObserver((mutations) => {
 });
 observer.observe(document.body, { childList: true, subtree: true });
 
-// ---------- Loading overlay control ----------
+// ---------- Loading overlay ----------
 const loadingOverlay = document.getElementById('loadingOverlay');
 function showLoading() { loadingOverlay.style.display = 'flex'; }
 function hideLoading() { loadingOverlay.style.opacity = '0'; setTimeout(() => { loadingOverlay.style.display = 'none'; }, 300); }
