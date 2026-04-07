@@ -2,7 +2,7 @@ export interface Env {
   DB: D1Database;
   BOT_TOKEN: string;
   WEBAPP_URL: string;
-  ADMIN_CHAT_ID: string;      // Your Telegram user ID (numerical)
+  ADMIN_CHAT_ID: string;      // Your Telegram numeric user ID
   PUBLIC_CHANNEL: string;     // Channel username e.g., @luckygems_updates
 }
 
@@ -186,28 +186,35 @@ async function handleRedeem(request: Request, env: Env): Promise<Response> {
     `INSERT INTO redemptions (user_id, type, amount, email, uid) VALUES (?, ?, ?, ?, ?)`
   ).bind(userId, type, required, email || null, uid || null).run();
 
-  // ----- Send notification to admin and public channel -----
+  // ----- Professional notification to admin and public channel -----
   const botToken = env.BOT_TOKEN;
   const adminId = env.ADMIN_CHAT_ID;
   const channelId = env.PUBLIC_CHANNEL; // e.g., "@luckygems_updates"
   
   const username = user.username || "Player";
-  const rewardText = type === 'freediamond' ? `🎮 Free Fire 500 Diamonds (UID: ${uid})` : `🎁 ${type === 'amazon' ? 'Amazon' : 'Google Play'} Gift Voucher (Email: ${email})`;
+  const userIdTelegram = user.telegram_id || "Unknown";
+  const method = type === 'freediamond' ? 'Free Fire Diamonds' : (type === 'amazon' ? 'Amazon Gift Voucher' : 'Google Play Voucher');
+  const details = type === 'freediamond' ? `UID: ${uid}` : `Email: ${email}`;
   
-  // Message for admin
-  const adminMsg = `🆕 *New Redeem Request!*\n👤 User: ${username}\n💰 Coins spent: ${required}\n🎁 Reward: ${rewardText}\n🕒 Time: ${new Date().toISOString()}`;
+  // Message for admin (detailed)
+  const adminMsg = `✅ *New Redeem Request!*\n\n👤 *User:* ${username}\n🆔 *User ID:* ${userIdTelegram}\n💰 *Coins Spent:* ${required}\n💳 *Method:* ${method}\n📧 *Details:* ${details}\n🕒 *Time:* ${new Date().toLocaleString()}`;
   await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: adminId, text: adminMsg, parse_mode: 'Markdown' })
   }).catch(e => console.error("Admin notify failed", e));
   
-  // Public channel message (simple proof)
-  const publicMsg = `✨ A new redeem request has been submitted by ${username}. We'll process it soon! Stay tuned.`;
+  // Public channel message (attractive, with inline button)
+  const publicMsg = `✨ *New Redeem Request* ✨\n\n👤 User: *${username}*\n💎 Method: *${method}*\n💰 Coins: *${required}*\n\n⏳ *Status:* Pending verification\n✅ Will be processed within 24 hours.`;
+  const inlineKeyboard = {
+    inline_keyboard: [
+      [{ text: "🔍 Check the bot", url: "https://t.me/LuckyGemsEarnbot" }]
+    ]
+  };
   await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: channelId, text: publicMsg })
+    body: JSON.stringify({ chat_id: channelId, text: publicMsg, parse_mode: 'Markdown', reply_markup: inlineKeyboard })
   }).catch(e => console.error("Channel notify failed", e));
 
   return Response.json({ success: true, newCoins });
@@ -252,7 +259,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML (All long press disabled) =======================
+// ======================= FRONTEND HTML (Long Press 100% Disabled) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -649,21 +656,23 @@ document.addEventListener('dragstart', function(e) {
   return false;
 }, true);
 document.body.oncontextmenu = function(e) { e.preventDefault(); return false; };
-
-function disableLongPress(el) {
+// Also prevent touch callout via CSS already done, but also force on all elements dynamically
+function killLongPress(el) {
   if (!el) return;
+  el.style.webkitTouchCallout = 'none';
+  el.style.userSelect = 'none';
   el.setAttribute('draggable', 'false');
   el.setAttribute('oncontextmenu', 'return false');
   el.addEventListener('contextmenu', (e) => { e.preventDefault(); return false; });
   el.addEventListener('dragstart', (e) => { e.preventDefault(); return false; });
 }
-document.querySelectorAll('img, .sidebtn, .action-btn img, .casino-btn, .collect-btn, button').forEach(disableLongPress);
+document.querySelectorAll('*').forEach(killLongPress);
 const observer = new MutationObserver((mutations) => {
   mutations.forEach((mutation) => {
     mutation.addedNodes.forEach((node) => {
       if (node.nodeType === 1) {
-        if (node.tagName === 'IMG') disableLongPress(node);
-        node.querySelectorAll && node.querySelectorAll('img, .sidebtn, .action-btn img, .casino-btn, .collect-btn, button').forEach(disableLongPress);
+        killLongPress(node);
+        node.querySelectorAll && node.querySelectorAll('*').forEach(killLongPress);
       }
     });
   });
