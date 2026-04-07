@@ -65,10 +65,10 @@ async function handleAuth(request: Request, env: Env): Promise<Response> {
       }
     }
     await env.DB.prepare(
-      `INSERT INTO users (id, telegram_id, coins, referral_code, referred_by)
-       VALUES (?, ?, ?, ?, ?)`
-    ).bind(userId, telegramId, coins, newCode, referredBy).run();
-    user = { id: userId, coins, referral_code: newCode };
+      `INSERT INTO users (id, telegram_id, username, coins, referral_code, referred_by)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).bind(userId, telegramId, "", coins, newCode, referredBy).run();
+    user = { id: userId, coins, referral_code: newCode, username: "" };
   }
   return Response.json({
     userId: user.id,
@@ -186,26 +186,38 @@ async function handleRedeem(request: Request, env: Env): Promise<Response> {
     `INSERT INTO redemptions (user_id, type, amount, email, uid) VALUES (?, ?, ?, ?, ?)`
   ).bind(userId, type, required, email || null, uid || null).run();
 
-  // ----- Professional notification to admin and public channel -----
+  // ----- Send notification to admin and public channel -----
   const botToken = env.BOT_TOKEN;
   const adminId = env.ADMIN_CHAT_ID;
-  const channelId = env.PUBLIC_CHANNEL; // e.g., "@luckygems_updates"
+  const channelId = env.PUBLIC_CHANNEL;
   
-  const username = user.username || "Player";
-  const userIdTelegram = user.telegram_id || "Unknown";
+  // Get user's first name from Telegram (we can store during auth, but for now we use username field)
+  // We'll fetch from Telegram API to get the real name
+  let userName = "User";
+  try {
+    const tgUserRes = await fetch(`https://api.telegram.org/bot${botToken}/getChat?chat_id=${user.telegram_id}`);
+    const tgData = await tgUserRes.json();
+    if (tgData.ok && tgData.result.first_name) {
+      userName = tgData.result.first_name;
+    } else {
+      userName = user.username || "Player";
+    }
+  } catch(e) {
+    userName = user.username || "Player";
+  }
+  
   const method = type === 'freediamond' ? 'Free Fire Diamonds' : (type === 'amazon' ? 'Amazon Gift Voucher' : 'Google Play Voucher');
-  const details = type === 'freediamond' ? `UID: ${uid}` : `Email: ${email}`;
   
-  // Message for admin (detailed)
-  const adminMsg = `✅ *New Redeem Request!*\n\n👤 *User:* ${username}\n🆔 *User ID:* ${userIdTelegram}\n💰 *Coins Spent:* ${required}\n💳 *Method:* ${method}\n📧 *Details:* ${details}\n🕒 *Time:* ${new Date().toLocaleString()}`;
+  // Admin message (detailed)
+  const adminMsg = `✅ *New Redeem Request!*\n\n👤 *User:* ${userName}\n🆔 *User ID:* ${user.telegram_id}\n💰 *Coins Spent:* ${required}\n💳 *Method:* ${method}\n📧 *Details:* ${type === 'freediamond' ? `UID: ${uid}` : `Email: ${email}`}\n🕒 *Time:* ${new Date().toLocaleString()}`;
   await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chat_id: adminId, text: adminMsg, parse_mode: 'Markdown' })
   }).catch(e => console.error("Admin notify failed", e));
   
-  // Public channel message (attractive, with inline button)
-  const publicMsg = `✨ *New Redeem Request* ✨\n\n👤 User: *${username}*\n💎 Method: *${method}*\n💰 Coins: *${required}*\n\n⏳ *Status:* Pending verification\n✅ Will be processed within 24 hours.`;
+  // Public channel message (attractive, with "Paid" status)
+  const publicMsg = `✨ *New Redeem Request* ✨\n\n👤 User: *${userName}*\n💎 Method: *${method}*\n💰 Coins: *${required}*\n\n✅ *Status: Paid*`;
   const inlineKeyboard = {
     inline_keyboard: [
       [{ text: "🔍 Check the bot", url: "https://t.me/LuckyGemsEarnbot" }]
@@ -227,13 +239,25 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
 
   const chatId = message.chat.id;
   const telegramId = message.from?.id.toString();
+  const firstName = message.from?.first_name || "Player";
   if (message.text === "/start") {
     let user = await env.DB.prepare("SELECT * FROM users WHERE telegram_id = ?").bind(telegramId).first();
     let replyText = "";
     if (!user) {
-      replyText = `✨ Welcome ${message.from?.first_name || "Player"}! Click below to play.`;
+      // Create user with proper username
+      const userId = crypto.randomUUID();
+      const newCode = generateReferralCode();
+      await env.DB.prepare(
+        `INSERT INTO users (id, telegram_id, username, coins, referral_code)
+         VALUES (?, ?, ?, ?, ?)`
+      ).bind(userId, telegramId, firstName, 10, newCode).run();
+      replyText = `✨ Welcome ${firstName}! Click below to play.`;
     } else {
-      replyText = `✨ Welcome back ${message.from?.first_name || "Player"}!\n💰 Coins: ${user.coins}\n🔗 Your referral code: \`${user.referral_code}\`\n\nShare this link – you both get 10 coins!`;
+      // Update username if changed
+      if (user.username !== firstName) {
+        await env.DB.prepare("UPDATE users SET username = ? WHERE telegram_id = ?").bind(firstName, telegramId).run();
+      }
+      replyText = `✨ Welcome back ${firstName}!\n💰 Coins: ${user.coins}\n🔗 Your referral code: \`${user.referral_code}\`\n\nShare this link – you both get 10 coins!`;
     }
     const webappUrl = `${env.WEBAPP_URL}?startapp=${user?.referral_code || ""}`;
     const botUsername = message.from?.username || "lucky_gems_bot";
@@ -630,7 +654,7 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
     <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false">
   </div>
   <div class="action-btn" id="unlockBtn">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/unlock-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
   </div>
 </div>
 <div id="winOverlay"><div class="win-box"><h1 class="win-title">BIG WIN!</h1><div class="win-amount" id="winLabel">+0</div><button class="collect-btn" id="collectBtn">COLLECT</button></div></div>
@@ -645,7 +669,7 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
-// ---------- Global long press prevention (capture phase) ----------
+// ---------- Global long press prevention (capture phase + every element) ----------
 document.addEventListener('contextmenu', function(e) {
   e.preventDefault();
   e.stopPropagation();
@@ -656,8 +680,8 @@ document.addEventListener('dragstart', function(e) {
   return false;
 }, true);
 document.body.oncontextmenu = function(e) { e.preventDefault(); return false; };
-// Also prevent touch callout via CSS already done, but also force on all elements dynamically
-function killLongPress(el) {
+// Apply to all existing and future elements
+function disableLongPress(el) {
   if (!el) return;
   el.style.webkitTouchCallout = 'none';
   el.style.userSelect = 'none';
@@ -666,13 +690,13 @@ function killLongPress(el) {
   el.addEventListener('contextmenu', (e) => { e.preventDefault(); return false; });
   el.addEventListener('dragstart', (e) => { e.preventDefault(); return false; });
 }
-document.querySelectorAll('*').forEach(killLongPress);
+document.querySelectorAll('*').forEach(disableLongPress);
 const observer = new MutationObserver((mutations) => {
   mutations.forEach((mutation) => {
     mutation.addedNodes.forEach((node) => {
       if (node.nodeType === 1) {
-        killLongPress(node);
-        node.querySelectorAll && node.querySelectorAll('*').forEach(killLongPress);
+        disableLongPress(node);
+        node.querySelectorAll && node.querySelectorAll('*').forEach(disableLongPress);
       }
     });
   });
