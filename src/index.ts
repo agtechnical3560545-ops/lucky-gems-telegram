@@ -278,7 +278,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML =======================
+// ======================= FRONTEND HTML (with pointer-events: none on images) =======================
 const HTML_TEMPLATE = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -319,13 +319,15 @@ body {
   overflow: hidden;
   touch-action: manipulation;
 }
-img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn, .refer-code-box {
+/* 🔥 CRITICAL: Disable pointer events on all images to prevent long press popup */
+img, .reel img, .frame, .bet-bar img, .action-btn img, .sidebtn img {
+  pointer-events: none !important;
   -webkit-touch-callout: none !important;
-  pointer-events: auto;
   -webkit-user-drag: none !important;
   user-drag: none !important;
   user-select: none !important;
 }
+/* Buttons themselves still receive clicks because they are not images */
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -362,7 +364,6 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn, .refer-code-b
   width: 100%;
   height: 100%;
   z-index: 3;
-  pointer-events: none; 
   transform: scale(1.25); 
   transform-origin: center;
 }
@@ -472,11 +473,11 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn, .refer-code-b
   width: 28%;
   max-width: 180px;
   z-index: 20;
+  cursor: pointer;
 }
 .action-btn img {
   width: 100%;
   cursor: pointer;
-  pointer-events: auto;
 }
 .bet-controls {
   display: flex;
@@ -626,7 +627,7 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn, .refer-code-b
 </div>
 <div class="machine-container">
   <div class="machine">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/frame.png" class="frame" draggable="false" oncontextmenu="return false">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/frame.png" class="frame" draggable="false">
     <div class="reels">
       <div class="reel" id="r1"></div>
       <div class="reel" id="r2"></div>
@@ -640,7 +641,7 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn, .refer-code-b
 </div>
 <div class="controls">
   <div class="bet-bar">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/bet-bar.png" draggable="false" oncontextmenu="return false">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/bet-bar.png" draggable="false">
     <div class="bet-text">BET</div>
     <div class="bet-controls">
       <button id="betMinus">-</button>
@@ -649,10 +650,10 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn, .refer-code-b
     </div>
   </div>
   <div class="action-btn" id="spinBtn" style="display: none;">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false">
   </div>
   <div class="action-btn" id="unlockBtn">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/unlock-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" style="cursor:pointer;">
   </div>
 </div>
 <div id="winOverlay"><div class="win-box"><h1 class="win-title">BIG WIN!</h1><div class="win-amount" id="winLabel">+0</div><button class="collect-btn" id="collectBtn">COLLECT</button></div></div>
@@ -667,7 +668,7 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
-// Global long press prevention - completely block context menu and selection
+// Global long press prevention - completely block context menu
 document.addEventListener('contextmenu', function(e) {
   e.preventDefault();
   e.stopPropagation();
@@ -678,7 +679,7 @@ document.addEventListener('dragstart', function(e) {
   return false;
 }, true);
 document.body.oncontextmenu = function(e) { e.preventDefault(); return false; };
-// Also prevent touch selection
+// Also block touch selection
 document.body.style.webkitTouchCallout = 'none';
 document.body.style.userSelect = 'none';
 
@@ -691,9 +692,7 @@ function disableLongPress(el) {
   el.addEventListener('contextmenu', (e) => { e.preventDefault(); return false; });
   el.addEventListener('dragstart', (e) => { e.preventDefault(); return false; });
 }
-// Apply to all existing elements
 document.querySelectorAll('*').forEach(disableLongPress);
-// Observer for dynamically added elements
 const observer = new MutationObserver((mutations) => {
   mutations.forEach((mutation) => {
     mutation.addedNodes.forEach((node) => {
@@ -1002,9 +1001,7 @@ function showBigWin(amt) {
 function closeWin() {
   if (isCollecting) return;
   isCollecting = true;
-  // Close overlay immediately
   document.getElementById("winOverlay").style.display = "none";
-  // Add the big win amount to coins
   smoothCoins(currentCoins + bigWinAmount, () => {
     isSpinning = false;
     enableSpin(true);
