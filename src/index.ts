@@ -241,18 +241,19 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
     let user = await env.DB.prepare("SELECT * FROM users WHERE telegram_id = ?").bind(telegramId).first();
     let replyText = "";
     if (!user) {
+      // Create new user
       const userId = crypto.randomUUID();
       const newCode = generateReferralCode();
       await env.DB.prepare(
         `INSERT INTO users (id, telegram_id, username, coins, referral_code)
          VALUES (?, ?, ?, ?, ?)`
       ).bind(userId, telegramId, firstName, 10, newCode).run();
-      replyText = `✨ Welcome ${firstName}! Click below to play.`;
+      replyText = `✨ *WELCOME TO LUCKY GEMS* ✨\n\n🎰 *Spin & Win Real Rewards!*\n\n💎 *Features:*\n• Match 3 gems → 5x your bet\n• Match 2 gems → 0.5x your bet\n• Bet from 1 to 10 coins\n• Refer friends → 10 coins each\n• Redeem Amazon/Google Play (500 coins) or Free Fire Diamonds (420 coins)\n\n🎁 *Get 10 free coins to start!*\n\n👇 *Click below to play now!*`;
     } else {
       if (user.username !== firstName) {
         await env.DB.prepare("UPDATE users SET username = ? WHERE telegram_id = ?").bind(firstName, telegramId).run();
       }
-      replyText = `✨ Welcome back ${firstName}!\n💰 Coins: ${user.coins}\n🔗 Your referral code: \`${user.referral_code}\`\n\nShare this link – you both get 10 coins!`;
+      replyText = `✨ *WELCOME BACK, ${firstName}!* ✨\n\n💰 *Your balance:* ${user.coins} coins\n🔗 *Your referral code:* \`${user.referral_code}\`\n\n🎁 *Share your link – you and your friend both get 10 coins!*\n\n👇 *Click below to spin!*`;
     }
     const webappUrl = `${env.WEBAPP_URL}?startapp=${user?.referral_code || ""}`;
     const botUsername = env.BOT_USERNAME;
@@ -653,7 +654,7 @@ img, .reel img, .frame, .bet-bar img, .action-btn img, .sidebtn img {
     <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false">
   </div>
   <div class="action-btn" id="unlockBtn">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" style="cursor:pointer;">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/unlock-btn.png" draggable="false" style="cursor:pointer;">
   </div>
 </div>
 <div id="winOverlay"><div class="win-box"><h1 class="win-title">BIG WIN!</h1><div class="win-amount" id="winLabel">+0</div><button class="collect-btn" id="collectBtn">COLLECT</button></div></div>
