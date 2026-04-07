@@ -4,6 +4,7 @@ export interface Env {
   WEBAPP_URL: string;
   ADMIN_CHAT_ID: string;      // Your Telegram numeric user ID
   PUBLIC_CHANNEL: string;     // Channel username e.g., @luckygems_updates
+  BOT_USERNAME: string;       // Your bot's username (without @) e.g., "LuckyGemsBot"
 }
 
 const GEMS = [
@@ -254,7 +255,8 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
       replyText = `✨ Welcome back ${firstName}!\n💰 Coins: ${user.coins}\n🔗 Your referral code: \`${user.referral_code}\`\n\nShare this link – you both get 10 coins!`;
     }
     const webappUrl = `${env.WEBAPP_URL}?startapp=${user?.referral_code || ""}`;
-    const botUsername = message.from?.username || "lucky_gems_bot";
+    // Use bot's own username from env for referral link
+    const botUsername = env.BOT_USERNAME;
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}?startapp=${user?.referral_code || ""}`)}&text=Join me on Lucky Gems and get 10 free coins!`;
     const payload = {
       method: "sendMessage",
@@ -293,7 +295,7 @@ const HTML_CONTENT = `<!DOCTYPE html>
   -webkit-user-select: none !important;
   user-select: none !important;
   -webkit-tap-highlight-color: transparent;
-  touch-action: pan-y;
+  touch-action: manipulation;
 }
 html, body {
   overscroll-behavior: none;
@@ -316,7 +318,7 @@ body {
   background-size: cover;
   height: 100vh;
   overflow: hidden;
-  touch-action: pan-y;
+  touch-action: manipulation;
 }
 img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn, .refer-code-box {
   -webkit-touch-callout: none !important;
@@ -651,7 +653,7 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn, .refer-code-b
     <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false">
   </div>
   <div class="action-btn" id="unlockBtn">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/unlock-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
   </div>
 </div>
 <div id="winOverlay"><div class="win-box"><h1 class="win-title">BIG WIN!</h1><div class="win-amount" id="winLabel">+0</div><button class="collect-btn" id="collectBtn">COLLECT</button></div></div>
@@ -711,6 +713,7 @@ let currentBet = 1;
 let isSpinning = false;
 let bigWinAmount = 0;
 let spinSoundTimeout = null;
+let isCollecting = false; // prevent double collect
 
 const gemsList = ${JSON.stringify(GEMS)};
 
@@ -924,7 +927,6 @@ async function spin() {
     if (data.win > 0) {
       playWinSound();
       if (data.win >= 15) {
-        // Show big win overlay, but do NOT add coins yet. Wait for collect.
         showBigWin(data.win);
       } else {
         smoothCoins(currentCoins + data.win, () => {
@@ -995,13 +997,15 @@ function showBigWin(amt) {
   bigWinAmount = amt;
 }
 function closeWin() {
+  if (isCollecting) return;
+  isCollecting = true;
   document.getElementById("winOverlay").style.display = "none";
-  // Add the big win amount to coins
   smoothCoins(currentCoins + bigWinAmount, () => {
     isSpinning = false;
     enableSpin(true);
     document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
     hideLoading();
+    isCollecting = false;
   });
   bigWinAmount = 0;
 }
@@ -1058,7 +1062,9 @@ async function initAuth() {
     currentCoins = data.coins;
     updateCoins();
     document.getElementById("username").innerText = u.first_name || "Player";
-    const botUsername = u.username || "lucky_gems_bot";
+    // Use bot's actual username from env (provided in global variable)
+    // We'll embed the bot username from the server into a JS variable
+    const botUsername = "${env.BOT_USERNAME}";
     window.referralLink = "https://t.me/" + botUsername + "?startapp=" + data.referralCode;
     const urlToken = urlParams.get('unlock_token');
     const urlUserId = urlParams.get('userId');
@@ -1167,7 +1173,10 @@ export default {
     const path = url.pathname;
 
     if (path === "/" || path === "/index.html") {
-      return new Response(HTML_CONTENT, { headers: { "Content-Type": "text/html" } });
+      // Replace bot username placeholder in HTML
+      let html = HTML_CONTENT;
+      html = html.replace('"${env.BOT_USERNAME}"', `"${env.BOT_USERNAME}"`);
+      return new Response(html, { headers: { "Content-Type": "text/html" } });
     }
 
     if (path === "/api/auth" && request.method === "POST") return handleAuth(request, env);
