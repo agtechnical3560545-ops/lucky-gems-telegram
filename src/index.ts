@@ -2,9 +2,9 @@ export interface Env {
   DB: D1Database;
   BOT_TOKEN: string;
   WEBAPP_URL: string;
-  ADMIN_CHAT_ID: string;      // Your Telegram numeric user ID
-  PUBLIC_CHANNEL: string;     // Channel username e.g., @luckygems_updates
-  BOT_USERNAME: string;       // Your bot's username (without @) e.g., "LuckyGemsBot"
+  ADMIN_CHAT_ID: string;
+  PUBLIC_CHANNEL: string;
+  BOT_USERNAME: string;
 }
 
 const GEMS = [
@@ -187,7 +187,7 @@ async function handleRedeem(request: Request, env: Env): Promise<Response> {
     `INSERT INTO redemptions (user_id, type, amount, email, uid) VALUES (?, ?, ?, ?, ?)`
   ).bind(userId, type, required, email || null, uid || null).run();
 
-  // Send notifications
+  // Notifications
   const botToken = env.BOT_TOKEN;
   const adminId = env.ADMIN_CHAT_ID;
   const channelId = env.PUBLIC_CHANNEL;
@@ -255,7 +255,6 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
       replyText = `✨ Welcome back ${firstName}!\n💰 Coins: ${user.coins}\n🔗 Your referral code: \`${user.referral_code}\`\n\nShare this link – you both get 10 coins!`;
     }
     const webappUrl = `${env.WEBAPP_URL}?startapp=${user?.referral_code || ""}`;
-    // Use bot's own username from env for referral link
     const botUsername = env.BOT_USERNAME;
     const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}?startapp=${user?.referral_code || ""}`)}&text=Join me on Lucky Gems and get 10 free coins!`;
     const payload = {
@@ -279,8 +278,8 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML (All fixes included) =======================
-const HTML_CONTENT = `<!DOCTYPE html>
+// ======================= FRONTEND HTML (using placeholder for bot username) =======================
+const HTML_TEMPLATE = `<!DOCTYPE html>
 <html lang="hi">
 <head>
 <meta charset="UTF-8">
@@ -653,7 +652,7 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn, .refer-code-b
     <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false">
   </div>
   <div class="action-btn" id="unlockBtn">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/unlock-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
   </div>
 </div>
 <div id="winOverlay"><div class="win-box"><h1 class="win-title">BIG WIN!</h1><div class="win-amount" id="winLabel">+0</div><button class="collect-btn" id="collectBtn">COLLECT</button></div></div>
@@ -668,7 +667,7 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
-// ---------- Global long press prevention (capture phase + every element) ----------
+// Global long press prevention
 document.addEventListener('contextmenu', function(e) {
   e.preventDefault();
   e.stopPropagation();
@@ -679,7 +678,7 @@ document.addEventListener('dragstart', function(e) {
   return false;
 }, true);
 document.body.oncontextmenu = function(e) { e.preventDefault(); return false; };
-// Apply to all existing and future elements
+
 function disableLongPress(el) {
   if (!el) return;
   el.style.webkitTouchCallout = 'none';
@@ -702,7 +701,6 @@ const observer = new MutationObserver((mutations) => {
 });
 observer.observe(document.body, { childList: true, subtree: true });
 
-// ---------- Loading overlay control ----------
 const loadingOverlay = document.getElementById('loadingOverlay');
 function showLoading() { loadingOverlay.style.display = 'flex'; }
 function hideLoading() { loadingOverlay.style.opacity = '0'; setTimeout(() => { loadingOverlay.style.display = 'none'; }, 300); }
@@ -713,7 +711,7 @@ let currentBet = 1;
 let isSpinning = false;
 let bigWinAmount = 0;
 let spinSoundTimeout = null;
-let isCollecting = false; // prevent double collect
+let isCollecting = false;
 
 const gemsList = ${JSON.stringify(GEMS)};
 
@@ -1062,9 +1060,7 @@ async function initAuth() {
     currentCoins = data.coins;
     updateCoins();
     document.getElementById("username").innerText = u.first_name || "Player";
-    // Use bot's actual username from env (provided in global variable)
-    // We'll embed the bot username from the server into a JS variable
-    const botUsername = "${env.BOT_USERNAME}";
+    const botUsername = 'BOT_USERNAME_PLACEHOLDER';
     window.referralLink = "https://t.me/" + botUsername + "?startapp=" + data.referralCode;
     const urlToken = urlParams.get('unlock_token');
     const urlUserId = urlParams.get('userId');
@@ -1087,7 +1083,6 @@ async function initAuth() {
     hideLoading();
   }
 }
-// Bet controls
 document.getElementById("betPlus").onclick = () => {
   playClickSound();
   if (currentBet < 10) { currentBet++; document.getElementById("betValue").innerText = currentBet; }
@@ -1096,7 +1091,6 @@ document.getElementById("betMinus").onclick = () => {
   playClickSound();
   if (currentBet > 1) { currentBet--; document.getElementById("betValue").innerText = currentBet; }
 };
-// Referral modal
 document.getElementById("referBtn").onclick = () => {
   playClickSound();
   document.getElementById("referLinkDisplay").innerText = window.referralLink || "Loading...";
@@ -1112,7 +1106,6 @@ document.getElementById("closeReferModal").onclick = () => {
   playClickSound();
   document.getElementById("referModal").style.display = "none";
 };
-// Redeem modal
 document.getElementById("redeemBtn").onclick = () => {
   playClickSound();
   document.getElementById("redeemModal").style.display = "flex";
@@ -1173,9 +1166,8 @@ export default {
     const path = url.pathname;
 
     if (path === "/" || path === "/index.html") {
-      // Replace bot username placeholder in HTML
-      let html = HTML_CONTENT;
-      html = html.replace('"${env.BOT_USERNAME}"', `"${env.BOT_USERNAME}"`);
+      // Replace placeholder with actual bot username from env
+      const html = HTML_TEMPLATE.replace(/BOT_USERNAME_PLACEHOLDER/g, env.BOT_USERNAME);
       return new Response(html, { headers: { "Content-Type": "text/html" } });
     }
 
