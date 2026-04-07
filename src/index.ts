@@ -2,6 +2,8 @@ export interface Env {
   DB: D1Database;
   BOT_TOKEN: string;
   WEBAPP_URL: string;
+  ADMIN_CHAT_ID: string;      // Your Telegram user ID (numerical)
+  PUBLIC_CHANNEL: string;     // Channel username e.g., @luckygems_updates
 }
 
 const GEMS = [
@@ -184,6 +186,30 @@ async function handleRedeem(request: Request, env: Env): Promise<Response> {
     `INSERT INTO redemptions (user_id, type, amount, email, uid) VALUES (?, ?, ?, ?, ?)`
   ).bind(userId, type, required, email || null, uid || null).run();
 
+  // ----- Send notification to admin and public channel -----
+  const botToken = env.BOT_TOKEN;
+  const adminId = env.ADMIN_CHAT_ID;
+  const channelId = env.PUBLIC_CHANNEL; // e.g., "@luckygems_updates"
+  
+  const username = user.username || "Player";
+  const rewardText = type === 'freediamond' ? `🎮 Free Fire 500 Diamonds (UID: ${uid})` : `🎁 ${type === 'amazon' ? 'Amazon' : 'Google Play'} Gift Voucher (Email: ${email})`;
+  
+  // Message for admin
+  const adminMsg = `🆕 *New Redeem Request!*\n👤 User: ${username}\n💰 Coins spent: ${required}\n🎁 Reward: ${rewardText}\n🕒 Time: ${new Date().toISOString()}`;
+  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: adminId, text: adminMsg, parse_mode: 'Markdown' })
+  }).catch(e => console.error("Admin notify failed", e));
+  
+  // Public channel message (simple proof)
+  const publicMsg = `✨ A new redeem request has been submitted by ${username}. We'll process it soon! Stay tuned.`;
+  await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: channelId, text: publicMsg })
+  }).catch(e => console.error("Channel notify failed", e));
+
   return Response.json({ success: true, newCoins });
 }
 
@@ -226,7 +252,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML (Fixed template literal) =======================
+// ======================= FRONTEND HTML (All long press disabled) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -267,6 +293,7 @@ body {
   overflow: hidden;
   touch-action: pan-y;
 }
+/* Force disable long press on all images and interactive elements */
 img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
   -webkit-touch-callout: none !important;
   pointer-events: auto;
@@ -291,29 +318,12 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
   border-radius: 40px;
   border: 1px solid #ffd700;
 }
-.swipe-container {
-  width: 100%;
-  height: calc(100% - 180px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  overflow: hidden;
-}
-.machine-wrapper {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  transition: transform 0.3s ease-out;
-  will-change: transform;
-}
 .machine-container {
   display: flex;
   justify-content: center;
   align-items: center;
+  margin-top: 220px; 
   position: relative;
-  width: 350px;
-  margin: 0 auto;
 }
 .machine {
   position: relative;
@@ -375,81 +385,6 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
   border: 1px solid #ffffff50;
   cursor: pointer;
   font-family: 'Orbitron', sans-serif;
-}
-.refer-panel {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(145deg, #1a1a2e, #0f0f1a);
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 25px;
-  padding: 20px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s ease;
-  backdrop-filter: blur(5px);
-}
-.refer-panel.visible {
-  opacity: 1;
-  pointer-events: auto;
-}
-.refer-panel h2 {
-  font-size: 32px;
-  background: linear-gradient(135deg, #ffd966, #ffb347);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  margin: 0;
-}
-.refer-panel p {
-  color: #ffec9f;
-  text-align: center;
-  font-size: 16px;
-}
-.refer-link-box {
-  background: rgba(0,0,0,0.7);
-  border: 1px solid #ffd700;
-  border-radius: 50px;
-  padding: 12px 20px;
-  width: 90%;
-  max-width: 300px;
-  text-align: center;
-  font-size: 14px;
-  color: #ffd966;
-  word-break: break-all;
-  font-family: monospace;
-}
-.refer-buttons {
-  display: flex;
-  gap: 20px;
-  justify-content: center;
-}
-.refer-btn {
-  background: linear-gradient(180deg, #ffb300, #fb8c00);
-  border: none;
-  border-radius: 50px;
-  padding: 12px 25px;
-  font-weight: bold;
-  font-family: 'Orbitron', monospace;
-  color: #1f1a0a;
-  cursor: pointer;
-  transition: transform 0.05s linear;
-  font-size: 16px;
-}
-.refer-btn:active {
-  transform: scale(0.96);
-}
-.close-panel {
-  background: rgba(255,255,255,0.1);
-  border: 1px solid #ffd700;
-  color: #ffd966;
-  margin-top: 20px;
 }
 .loading-overlay {
   position: fixed;
@@ -660,32 +595,18 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
   <div>👤 <span id="username">Player</span></div>
   <div class="coins">💰 <span id="coins">0.00</span></div>
 </div>
-<div class="swipe-container" id="swipeContainer">
-  <div class="machine-wrapper" id="machineWrapper">
-    <div class="machine-container">
-      <div class="machine">
-        <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/frame.png" class="frame" draggable="false" oncontextmenu="return false">
-        <div class="reels">
-          <div class="reel" id="r1"></div>
-          <div class="reel" id="r2"></div>
-          <div class="reel" id="r3"></div>
-        </div>
-      </div>
-      <div class="sidebar">
-        <div class="sidebtn" id="referBtn">🔗 REFER</div>
-        <div class="sidebtn" id="redeemBtn">🎁 REDEEM</div>
-      </div>
+<div class="machine-container">
+  <div class="machine">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/frame.png" class="frame" draggable="false" oncontextmenu="return false">
+    <div class="reels">
+      <div class="reel" id="r1"></div>
+      <div class="reel" id="r2"></div>
+      <div class="reel" id="r3"></div>
     </div>
   </div>
-  <div class="refer-panel" id="referPanel">
-    <h2>🔗 REFER & EARN</h2>
-    <p>Invite your friends<br>and earn gems</p>
-    <div class="refer-link-box" id="panelReferLink">Loading...</div>
-    <div class="refer-buttons">
-      <button class="refer-btn" id="panelCopyBtn">COPY LINK</button>
-      <button class="refer-btn" id="panelShareBtn">SHARE</button>
-    </div>
-    <button class="refer-btn close-panel" id="closePanelBtn">CLOSE</button>
+  <div class="sidebar">
+    <div class="sidebtn" id="referBtn">🔗 REFER</div>
+    <div class="sidebtn" id="redeemBtn">🎁 REDEEM</div>
   </div>
 </div>
 <div class="controls">
@@ -717,64 +638,7 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
-// ---------- Swipe to reveal referral panel ----------
-let touchStartX = 0;
-let touchMoveX = 0;
-let isDragging = false;
-let startTransform = 0;
-const machineWrapper = document.getElementById('machineWrapper');
-const panel = document.getElementById('referPanel');
-let panelVisible = false;
-
-function openPanel() {
-  if (isSpinning) return;
-  panelVisible = true;
-  panel.classList.add('visible');
-  machineWrapper.style.transform = 'translateX(-100%)';
-}
-function closePanel() {
-  panelVisible = false;
-  panel.classList.remove('visible');
-  machineWrapper.style.transform = 'translateX(0)';
-}
-const swipeContainer = document.getElementById('swipeContainer');
-swipeContainer.addEventListener('touchstart', (e) => {
-  if (isSpinning) return;
-  touchStartX = e.touches[0].clientX;
-  startTransform = panelVisible ? -100 : 0;
-  isDragging = true;
-});
-swipeContainer.addEventListener('touchmove', (e) => {
-  if (isSpinning || !isDragging) return;
-  touchMoveX = e.touches[0].clientX;
-  let delta = touchMoveX - touchStartX;
-  let newTransform = startTransform + (delta / window.innerWidth) * 100;
-  newTransform = Math.min(0, Math.max(-100, newTransform));
-  machineWrapper.style.transform = 'translateX(' + newTransform + '%)';
-  let panelOpacity = Math.abs(newTransform) / 100;
-  if (panelOpacity > 0.1) {
-    panel.classList.add('visible');
-    panel.style.opacity = panelOpacity;
-  } else {
-    panel.style.opacity = 0;
-  }
-});
-swipeContainer.addEventListener('touchend', (e) => {
-  if (isSpinning) return;
-  isDragging = false;
-  let finalTransform = parseFloat(machineWrapper.style.transform.replace('translateX(', '').replace('%)', '')) || 0;
-  if (finalTransform < -50) {
-    openPanel();
-  } else {
-    closePanel();
-  }
-  panel.style.opacity = '';
-});
-document.getElementById('closePanelBtn').addEventListener('click', () => {
-  closePanel();
-});
-
-// ---------- Global long press prevention ----------
+// ---------- Global long press prevention (capture phase) ----------
 document.addEventListener('contextmenu', function(e) {
   e.preventDefault();
   e.stopPropagation();
@@ -806,7 +670,7 @@ const observer = new MutationObserver((mutations) => {
 });
 observer.observe(document.body, { childList: true, subtree: true });
 
-// ---------- Loading overlay ----------
+// ---------- Loading overlay control ----------
 const loadingOverlay = document.getElementById('loadingOverlay');
 function showLoading() { loadingOverlay.style.display = 'flex'; }
 function hideLoading() { loadingOverlay.style.opacity = '0'; setTimeout(() => { loadingOverlay.style.display = 'none'; }, 300); }
@@ -1155,10 +1019,7 @@ async function initAuth() {
     updateCoins();
     document.getElementById("username").innerText = u.first_name || "Player";
     const botUsername = u.username || "lucky_gems_bot";
-    const fullReferralLink = "https://t.me/" + botUsername + "?startapp=" + data.referralCode;
-    window.referralLink = fullReferralLink;
-    const panelLink = document.getElementById('panelReferLink');
-    if (panelLink) panelLink.innerText = fullReferralLink;
+    window.referralLink = "https://t.me/" + botUsername + "?startapp=" + data.referralCode;
     const urlToken = urlParams.get('unlock_token');
     const urlUserId = urlParams.get('userId');
     if (urlToken && urlUserId && urlUserId === userId) {
@@ -1189,32 +1050,7 @@ document.getElementById("betMinus").onclick = () => {
   playClickSound();
   if (currentBet > 1) { currentBet--; document.getElementById("betValue").innerText = currentBet; }
 };
-// Panel buttons
-document.getElementById("panelCopyBtn").onclick = () => {
-  playClickSound();
-  const link = window.referralLink;
-  if (link) {
-    navigator.clipboard.writeText(link);
-    alert("Referral link copied!");
-  } else {
-    alert("Loading, please try again.");
-  }
-};
-document.getElementById("panelShareBtn").onclick = () => {
-  playClickSound();
-  const link = window.referralLink;
-  if (link) {
-    if (tg.shareToStory) {
-      tg.shareToStory(link);
-    } else {
-      navigator.clipboard.writeText(link);
-      alert("Link copied! You can now share it.");
-    }
-  } else {
-    alert("Loading, please wait.");
-  }
-};
-// Old refer modal buttons (keep for compatibility)
+// Referral modal
 document.getElementById("referBtn").onclick = () => {
   playClickSound();
   document.getElementById("referLinkDisplay").innerText = window.referralLink || "Loading...";
