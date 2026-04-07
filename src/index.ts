@@ -278,7 +278,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML (using placeholder for bot username) =======================
+// ======================= FRONTEND HTML =======================
 const HTML_TEMPLATE = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -652,7 +652,7 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn, .refer-code-b
     <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false">
   </div>
   <div class="action-btn" id="unlockBtn">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/unlock-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
   </div>
 </div>
 <div id="winOverlay"><div class="win-box"><h1 class="win-title">BIG WIN!</h1><div class="win-amount" id="winLabel">+0</div><button class="collect-btn" id="collectBtn">COLLECT</button></div></div>
@@ -667,7 +667,7 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
-// Global long press prevention
+// Global long press prevention - completely block context menu and selection
 document.addEventListener('contextmenu', function(e) {
   e.preventDefault();
   e.stopPropagation();
@@ -678,6 +678,9 @@ document.addEventListener('dragstart', function(e) {
   return false;
 }, true);
 document.body.oncontextmenu = function(e) { e.preventDefault(); return false; };
+// Also prevent touch selection
+document.body.style.webkitTouchCallout = 'none';
+document.body.style.userSelect = 'none';
 
 function disableLongPress(el) {
   if (!el) return;
@@ -688,7 +691,9 @@ function disableLongPress(el) {
   el.addEventListener('contextmenu', (e) => { e.preventDefault(); return false; });
   el.addEventListener('dragstart', (e) => { e.preventDefault(); return false; });
 }
+// Apply to all existing elements
 document.querySelectorAll('*').forEach(disableLongPress);
+// Observer for dynamically added elements
 const observer = new MutationObserver((mutations) => {
   mutations.forEach((mutation) => {
     mutation.addedNodes.forEach((node) => {
@@ -997,7 +1002,9 @@ function showBigWin(amt) {
 function closeWin() {
   if (isCollecting) return;
   isCollecting = true;
+  // Close overlay immediately
   document.getElementById("winOverlay").style.display = "none";
+  // Add the big win amount to coins
   smoothCoins(currentCoins + bigWinAmount, () => {
     isSpinning = false;
     enableSpin(true);
@@ -1166,7 +1173,6 @@ export default {
     const path = url.pathname;
 
     if (path === "/" || path === "/index.html") {
-      // Replace placeholder with actual bot username from env
       const html = HTML_TEMPLATE.replace(/BOT_USERNAME_PLACEHOLDER/g, env.BOT_USERNAME);
       return new Response(html, { headers: { "Content-Type": "text/html" } });
     }
