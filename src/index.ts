@@ -43,6 +43,7 @@ function generateReferralCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+// ------------------------- AUTH -------------------------
 async function handleAuth(request: Request, env: Env): Promise<Response> {
   const { telegramId, referCode } = await request.json() as any;
   if (!telegramId) return Response.json({ error: "telegramId required" }, { status: 400 });
@@ -76,6 +77,7 @@ async function handleAuth(request: Request, env: Env): Promise<Response> {
   });
 }
 
+// ------------------------- UNLOCK SYSTEM (ShrinkMe.io) -------------------------
 async function handleUnlock(request: Request, env: Env): Promise<Response> {
   const { userId } = await request.json() as { userId: string };
   if (!userId) return Response.json({ error: "userId required" }, { status: 400 });
@@ -102,7 +104,7 @@ async function handleUnlock(request: Request, env: Env): Promise<Response> {
       throw new Error("ShrinkMe API failed");
     }
     await env.DB.prepare("INSERT INTO unlocks (user_id, unlock_token, last_unlock_at) VALUES (?, ?, ?)")
-      .bind(userId, token, new Date(0).toISOString()).run();
+      .bind(userId, token, new Date(0).toISOString()).run(); // pending
     return Response.json({ success: true, shortLink, token });
   } catch (e) {
     console.error(e);
@@ -130,6 +132,7 @@ async function handleUnlockStatus(request: Request, env: Env): Promise<Response>
   return Response.json({ unlocked: diffHours < 24 });
 }
 
+// ------------------------- SPIN & REDEEM -------------------------
 async function handleSpin(request: Request, env: Env): Promise<Response> {
   const { userId, bet } = await request.json() as { userId: string; bet: number };
   if (!bet || bet < 1 || bet > 10) return Response.json({ error: "Bet must be 1-10" }, { status: 400 });
@@ -187,6 +190,7 @@ async function handleRedeem(request: Request, env: Env): Promise<Response> {
   return Response.json({ success: true, newCoins });
 }
 
+// ------------------------- TELEGRAM WEBHOOK -------------------------
 async function handleTelegramWebhook(request: Request, env: Env): Promise<Response> {
   const update = await request.json() as any;
   const message = update.message;
@@ -226,7 +230,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML (With Swipe Referral Panel) =======================
+// ======================= FRONTEND HTML (Swipe to Reveal Referral Panel) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -267,6 +271,7 @@ body {
   overflow: hidden;
   touch-action: pan-y;
 }
+/* Force disable long press on all images and interactive elements */
 img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
   -webkit-touch-callout: none !important;
   pointer-events: auto;
@@ -291,13 +296,30 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
   border-radius: 40px;
   border: 1px solid #ffd700;
 }
+/* Swipe Container */
+.swipe-container {
+  width: 100%;
+  height: calc(100% - 180px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.machine-wrapper {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  transition: transform 0.3s ease-out;
+  will-change: transform;
+}
 .machine-container {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-top: 220px; 
   position: relative;
-  transition: transform 0.3s ease;
+  width: 350px;
+  margin: 0 auto;
 }
 .machine {
   position: relative;
@@ -360,31 +382,32 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
   cursor: pointer;
   font-family: 'Orbitron', sans-serif;
 }
-/* Swipe Referral Panel */
+/* Referral Panel (hidden initially, appears when swiped) */
 .refer-panel {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
-  width: 85%;
-  max-width: 320px;
+  width: 100%;
   height: 100%;
   background: linear-gradient(145deg, #1a1a2e, #0f0f1a);
-  z-index: 200;
-  transform: translateX(-100%);
-  transition: transform 0.3s cubic-bezier(0.2, 0.9, 0.4, 1.1);
-  box-shadow: 5px 0 25px rgba(0,0,0,0.5);
-  border-right: 2px solid gold;
-  padding: 80px 20px 20px;
+  z-index: 50;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 25px;
+  padding: 20px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  backdrop-filter: blur(5px);
 }
-.refer-panel.open {
-  transform: translateX(0);
+.refer-panel.visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 .refer-panel h2 {
-  font-size: 28px;
+  font-size: 32px;
   background: linear-gradient(135deg, #ffd966, #ffb347);
   -webkit-background-clip: text;
   background-clip: text;
@@ -394,49 +417,46 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
 .refer-panel p {
   color: #ffec9f;
   text-align: center;
-  font-size: 14px;
+  font-size: 16px;
 }
 .refer-link-box {
   background: rgba(0,0,0,0.7);
   border: 1px solid #ffd700;
   border-radius: 50px;
-  padding: 12px;
-  width: 100%;
+  padding: 12px 20px;
+  width: 90%;
+  max-width: 300px;
   text-align: center;
-  font-size: 12px;
+  font-size: 14px;
   color: #ffd966;
   word-break: break-all;
   font-family: monospace;
 }
 .refer-buttons {
   display: flex;
-  gap: 15px;
-  width: 100%;
+  gap: 20px;
   justify-content: center;
 }
 .refer-btn {
   background: linear-gradient(180deg, #ffb300, #fb8c00);
   border: none;
   border-radius: 50px;
-  padding: 12px 20px;
+  padding: 12px 25px;
   font-weight: bold;
   font-family: 'Orbitron', monospace;
   color: #1f1a0a;
   cursor: pointer;
   transition: transform 0.05s linear;
-  flex: 1;
-  text-align: center;
   font-size: 16px;
 }
 .refer-btn:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 .close-panel {
   background: rgba(255,255,255,0.1);
   border: 1px solid #ffd700;
   color: #ffd966;
-  margin-top: auto;
-  margin-bottom: 40px;
+  margin-top: 20px;
 }
 /* Loading overlay */
 .loading-overlay {
@@ -648,18 +668,32 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
   <div>👤 <span id="username">Player</span></div>
   <div class="coins">💰 <span id="coins">0.00</span></div>
 </div>
-<div class="machine-container" id="machineContainer">
-  <div class="machine">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/frame.png" class="frame" draggable="false" oncontextmenu="return false">
-    <div class="reels">
-      <div class="reel" id="r1"></div>
-      <div class="reel" id="r2"></div>
-      <div class="reel" id="r3"></div>
+<div class="swipe-container" id="swipeContainer">
+  <div class="machine-wrapper" id="machineWrapper">
+    <div class="machine-container">
+      <div class="machine">
+        <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/frame.png" class="frame" draggable="false" oncontextmenu="return false">
+        <div class="reels">
+          <div class="reel" id="r1"></div>
+          <div class="reel" id="r2"></div>
+          <div class="reel" id="r3"></div>
+        </div>
+      </div>
+      <div class="sidebar">
+        <div class="sidebtn" id="referBtn">🔗 REFER</div>
+        <div class="sidebtn" id="redeemBtn">🎁 REDEEM</div>
+      </div>
     </div>
   </div>
-  <div class="sidebar">
-    <div class="sidebtn" id="referBtn">🔗 REFER</div>
-    <div class="sidebtn" id="redeemBtn">🎁 REDEEM</div>
+  <div class="refer-panel" id="referPanel">
+    <h2>🔗 REFER & EARN</h2>
+    <p>Invite your friends<br>and earn gems</p>
+    <div class="refer-link-box" id="panelReferLink">Loading...</div>
+    <div class="refer-buttons">
+      <button class="refer-btn" id="panelCopyBtn">COPY LINK</button>
+      <button class="refer-btn" id="panelShareBtn">SHARE</button>
+    </div>
+    <button class="refer-btn close-panel" id="closePanelBtn">CLOSE</button>
   </div>
 </div>
 <div class="controls">
@@ -679,17 +713,6 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
     <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
   </div>
 </div>
-<!-- Swipe Referral Panel -->
-<div class="refer-panel" id="referPanel">
-  <h2>🔗 REFER & EARN</h2>
-  <p>Invite your friends<br>and earn gems</p>
-  <div class="refer-link-box" id="panelReferLink">Loading...</div>
-  <div class="refer-buttons">
-    <button class="refer-btn" id="panelCopyBtn">COPY LINK</button>
-    <button class="refer-btn" id="panelShareBtn">SHARE</button>
-  </div>
-  <button class="refer-btn close-panel" id="closePanelBtn">CLOSE</button>
-</div>
 <div id="winOverlay"><div class="win-box"><h1 class="win-title">BIG WIN!</h1><div class="win-amount" id="winLabel">+0</div><button class="collect-btn" id="collectBtn">COLLECT</button></div></div>
 <div id="referModal" class="modal"><div class="modal-content"><div style="font-size:24px;">🔗 YOUR REFERRAL LINK</div><div class="refer-code-box" id="referLinkDisplay">Loading...</div><button class="casino-btn" id="copyReferLink">COPY LINK</button><button class="casino-btn" id="closeReferModal">CLOSE</button></div></div>
 <div id="redeemModal" class="modal"><div class="modal-content"><div style="font-size:24px;">🎁 REDEEM</div>
@@ -702,46 +725,67 @@ const tg = window.Telegram.WebApp;
 tg.expand();
 tg.ready();
 
-// ---------- Swipe detection for referral panel ----------
+// ---------- Swipe to reveal referral panel ----------
 let touchStartX = 0;
-let touchEndX = 0;
-let isPanelOpen = false;
+let touchMoveX = 0;
+let isDragging = false;
+let startTransform = 0;
+const machineWrapper = document.getElementById('machineWrapper');
 const panel = document.getElementById('referPanel');
-const machineContainer = document.getElementById('machineContainer');
+let panelVisible = false;
 
 function openPanel() {
-  if (isSpinning) return; // don't open during spin
-  panel.classList.add('open');
-  isPanelOpen = true;
+  if (isSpinning) return;
+  panelVisible = true;
+  panel.classList.add('visible');
+  machineWrapper.style.transform = 'translateX(-100%)';
 }
 function closePanel() {
-  panel.classList.remove('open');
-  isPanelOpen = false;
+  panelVisible = false;
+  panel.classList.remove('visible');
+  machineWrapper.style.transform = 'translateX(0)';
 }
-
-document.body.addEventListener('touchstart', (e) => {
-  touchStartX = e.changedTouches[0].clientX;
-}, { passive: true });
-document.body.addEventListener('touchend', (e) => {
-  touchEndX = e.changedTouches[0].clientX;
-  const delta = touchEndX - touchStartX;
-  // left edge swipe (start near left edge) and swipe right -> open panel
-  if (touchStartX < 30 && delta > 50 && !isPanelOpen && !isSpinning) {
-    openPanel();
-  }
-  // swipe left (delta negative) while panel open -> close panel
-  if (isPanelOpen && delta < -50) {
-    closePanel();
+// Swipe detection on the swipe container
+const swipeContainer = document.getElementById('swipeContainer');
+swipeContainer.addEventListener('touchstart', (e) => {
+  if (isSpinning) return;
+  touchStartX = e.touches[0].clientX;
+  startTransform = panelVisible ? -100 : 0;
+  isDragging = true;
+});
+swipeContainer.addEventListener('touchmove', (e) => {
+  if (isSpinning || !isDragging) return;
+  touchMoveX = e.touches[0].clientX;
+  let delta = touchMoveX - touchStartX;
+  let newTransform = startTransform + (delta / window.innerWidth) * 100;
+  newTransform = Math.min(0, Math.max(-100, newTransform));
+  machineWrapper.style.transform = `translateX(${newTransform}%)`;
+  // Show panel opacity based on how far swiped
+  let panelOpacity = Math.abs(newTransform) / 100;
+  if (panelOpacity > 0.1) {
+    panel.classList.add('visible');
+    panel.style.opacity = panelOpacity;
+  } else {
+    panel.style.opacity = 0;
   }
 });
-
-// Close panel buttons
+swipeContainer.addEventListener('touchend', (e) => {
+  if (isSpinning) return;
+  isDragging = false;
+  let finalTransform = parseFloat(machineWrapper.style.transform.replace('translateX(', '').replace('%)', '')) || 0;
+  if (finalTransform < -50) {
+    openPanel();
+  } else {
+    closePanel();
+  }
+  panel.style.opacity = '';
+});
+// Close panel button
 document.getElementById('closePanelBtn').addEventListener('click', () => {
   closePanel();
 });
-// Also close when clicking outside? Not needed.
 
-// ---------- Global long press prevention ----------
+// ---------- Global long press prevention (capture phase) ----------
 document.addEventListener('contextmenu', function(e) {
   e.preventDefault();
   e.stopPropagation();
@@ -1124,7 +1168,6 @@ async function initAuth() {
     const botUsername = u.username || "lucky_gems_bot";
     const fullReferralLink = "https://t.me/" + botUsername + "?startapp=" + data.referralCode;
     window.referralLink = fullReferralLink;
-    // Update panel link
     const panelLink = document.getElementById('panelReferLink');
     if (panelLink) panelLink.innerText = fullReferralLink;
     const urlToken = urlParams.get('unlock_token');
@@ -1172,10 +1215,9 @@ document.getElementById("panelShareBtn").onclick = () => {
   playClickSound();
   const link = window.referralLink;
   if (link) {
-    if (tg.shareToStory) { // use Telegram share if available
+    if (tg.shareToStory) {
       tg.shareToStory(link);
     } else {
-      // fallback
       navigator.clipboard.writeText(link);
       alert("Link copied! You can now share it.");
     }
