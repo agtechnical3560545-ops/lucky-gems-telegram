@@ -186,13 +186,11 @@ async function handleRedeem(request: Request, env: Env): Promise<Response> {
     `INSERT INTO redemptions (user_id, type, amount, email, uid) VALUES (?, ?, ?, ?, ?)`
   ).bind(userId, type, required, email || null, uid || null).run();
 
-  // ----- Send notification to admin and public channel -----
+  // Send notifications
   const botToken = env.BOT_TOKEN;
   const adminId = env.ADMIN_CHAT_ID;
   const channelId = env.PUBLIC_CHANNEL;
   
-  // Get user's first name from Telegram (we can store during auth, but for now we use username field)
-  // We'll fetch from Telegram API to get the real name
   let userName = "User";
   try {
     const tgUserRes = await fetch(`https://api.telegram.org/bot${botToken}/getChat?chat_id=${user.telegram_id}`);
@@ -208,7 +206,6 @@ async function handleRedeem(request: Request, env: Env): Promise<Response> {
   
   const method = type === 'freediamond' ? 'Free Fire Diamonds' : (type === 'amazon' ? 'Amazon Gift Voucher' : 'Google Play Voucher');
   
-  // Admin message (detailed)
   const adminMsg = `✅ *New Redeem Request!*\n\n👤 *User:* ${userName}\n🆔 *User ID:* ${user.telegram_id}\n💰 *Coins Spent:* ${required}\n💳 *Method:* ${method}\n📧 *Details:* ${type === 'freediamond' ? `UID: ${uid}` : `Email: ${email}`}\n🕒 *Time:* ${new Date().toLocaleString()}`;
   await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: 'POST',
@@ -216,7 +213,6 @@ async function handleRedeem(request: Request, env: Env): Promise<Response> {
     body: JSON.stringify({ chat_id: adminId, text: adminMsg, parse_mode: 'Markdown' })
   }).catch(e => console.error("Admin notify failed", e));
   
-  // Public channel message (attractive, with "Paid" status)
   const publicMsg = `✨ *New Redeem Request* ✨\n\n👤 User: *${userName}*\n💎 Method: *${method}*\n💰 Coins: *${required}*\n\n✅ *Status: Paid*`;
   const inlineKeyboard = {
     inline_keyboard: [
@@ -244,7 +240,6 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
     let user = await env.DB.prepare("SELECT * FROM users WHERE telegram_id = ?").bind(telegramId).first();
     let replyText = "";
     if (!user) {
-      // Create user with proper username
       const userId = crypto.randomUUID();
       const newCode = generateReferralCode();
       await env.DB.prepare(
@@ -253,7 +248,6 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
       ).bind(userId, telegramId, firstName, 10, newCode).run();
       replyText = `✨ Welcome ${firstName}! Click below to play.`;
     } else {
-      // Update username if changed
       if (user.username !== firstName) {
         await env.DB.prepare("UPDATE users SET username = ? WHERE telegram_id = ?").bind(firstName, telegramId).run();
       }
@@ -283,7 +277,7 @@ async function handleTelegramWebhook(request: Request, env: Env): Promise<Respon
   return new Response("OK", { status: 200 });
 }
 
-// ======================= FRONTEND HTML (Long Press 100% Disabled) =======================
+// ======================= FRONTEND HTML (All fixes included) =======================
 const HTML_CONTENT = `<!DOCTYPE html>
 <html lang="hi">
 <head>
@@ -324,8 +318,7 @@ body {
   overflow: hidden;
   touch-action: pan-y;
 }
-/* Force disable long press on all images and interactive elements */
-img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
+img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn, .refer-code-box {
   -webkit-touch-callout: none !important;
   pointer-events: auto;
   -webkit-user-drag: none !important;
@@ -588,13 +581,17 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
 }
 .refer-code-box {
   background: #000;
-  font-size: 28px;
-  letter-spacing: 4px;
-  padding: 15px;
+  font-size: 20px;
+  letter-spacing: 1px;
+  padding: 12px;
   border-radius: 30px;
   border: 1px solid gold;
   color: gold;
   margin: 15px 0;
+  word-break: break-all;
+  overflow-wrap: break-word;
+  white-space: normal;
+  font-family: monospace;
 }
 .casino-input, .casino-select {
   width: 100%;
@@ -654,7 +651,7 @@ img, button, .sidebtn, .action-btn img, .casino-btn, .collect-btn {
     <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false">
   </div>
   <div class="action-btn" id="unlockBtn">
-    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/unlock-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
+    <img src="https://cdn.jsdelivr.net/gh/agtechnical3560545-ops/lucky-gems-telegram@main/spin-btn.png" draggable="false" oncontextmenu="return false" style="cursor:pointer;">
   </div>
 </div>
 <div id="winOverlay"><div class="win-box"><h1 class="win-title">BIG WIN!</h1><div class="win-amount" id="winLabel">+0</div><button class="collect-btn" id="collectBtn">COLLECT</button></div></div>
@@ -926,13 +923,17 @@ async function spin() {
     highlightWins(data.matrix);
     if (data.win > 0) {
       playWinSound();
-      if (data.win >= 15) showBigWin(data.win);
-      else smoothCoins(currentCoins + data.win, () => {
-        isSpinning = false;
-        if (spinImg) spinImg.style.pointerEvents = "auto";
-        document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
-        hideLoading();
-      });
+      if (data.win >= 15) {
+        // Show big win overlay, but do NOT add coins yet. Wait for collect.
+        showBigWin(data.win);
+      } else {
+        smoothCoins(currentCoins + data.win, () => {
+          isSpinning = false;
+          if (spinImg) spinImg.style.pointerEvents = "auto";
+          document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
+          hideLoading();
+        });
+      }
     } else {
       isSpinning = false;
       if (spinImg) spinImg.style.pointerEvents = "auto";
@@ -995,7 +996,13 @@ function showBigWin(amt) {
 }
 function closeWin() {
   document.getElementById("winOverlay").style.display = "none";
-  smoothCoins(currentCoins + bigWinAmount, () => {});
+  // Add the big win amount to coins
+  smoothCoins(currentCoins + bigWinAmount, () => {
+    isSpinning = false;
+    enableSpin(true);
+    document.querySelectorAll('.glow').forEach(el => el.classList.remove('glow'));
+    hideLoading();
+  });
   bigWinAmount = 0;
 }
 async function checkUnlockStatus() {
